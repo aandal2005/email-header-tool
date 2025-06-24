@@ -3,12 +3,15 @@ const cors = require('cors');
 const app = express();
 const PORT = process.env.PORT || 10000;
 
+// ✅ Enable CORS for frontend URL
 app.use(cors({
   origin: 'https://email-header-frontend.onrender.com'
 }));
+
 app.use(express.json());
 app.use(express.static('public'));
 
+// ✅ POST /analyze route
 app.post('/analyze', (req, res) => {
   const header = req.body.header;
 
@@ -30,5 +33,5 @@ app.post('/analyze', (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`Server is running at http://localhost:${PORT}`);
+  console.log(`✅ Server running at http://localhost:${PORT}`);
 });

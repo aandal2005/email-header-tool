@@ -1,7 +1,12 @@
 const express = require('express');
-const path = require('path');
+const cors = require('cors');
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 10000;
+
+// Allow requests from your frontend domain
+app.use(cors({
+  origin: 'https://email-header-frontend.onrender.com'
+}));
 
 app.use(express.json());
 app.use(express.static('public'));

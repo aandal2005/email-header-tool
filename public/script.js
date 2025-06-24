@@ -1,16 +1,14 @@
 async function analyzeHeader() {
-  const headerInput = document.getElementById('headerInput').value;
+  const headerText = document.getElementById('headerInput').value;
 
-  const response = await fetch('https://email-header-backend.onrender.com/analyze', {
-    method: 'POST',
+  const response = await fetch("https://email-header-backend.onrender.com/analyze", {
+    method: "POST",
     headers: {
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json"
     },
-    body: JSON.stringify({ header: headerInput }),
+    body: JSON.stringify({ header: headerText })
   });
 
   const result = await response.json();
-
-  const resultDiv = document.getElementById('result');
-  resultDiv.innerHTML = '<pre>' + JSON.stringify(result, null, 2) + '</pre>';
+  document.getElementById("result").innerText = JSON.stringify(result, null, 2);
 }

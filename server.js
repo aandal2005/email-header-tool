@@ -1,3 +1,4 @@
+// server.js
 const express = require('express');
 const cors = require('cors');
 const fetch = require('node-fetch');
@@ -6,10 +7,15 @@ const app = express();
 const PORT = process.env.PORT || 10000;
 
 app.use(cors({
-  origin: 'https://email-header-frontend.onrender.com'  // Replace with your frontend domain if needed
+  origin: 'https://email-header-frontend.onrender.com'
 }));
 app.use(express.json());
-app.use(express.static('public'));
+
+// Helper to extract sender IP from Received headers
+function extractSenderIP(header) {
+  const match = header.match(/Received: from .*\[(\d+\.\d+\.\d+\.\d+)\]/);
+  return match ? match[1] : null;
+}
 
 app.post('/analyze', async (req, res) => {
   const header = req.body.header;
@@ -19,14 +25,14 @@ app.post('/analyze', async (req, res) => {
   }
 
   const importantKeys = [
-  'From',
-  'To',
-  'Delivered-To',
-  'Return-Path',
-  'Received-SPF',
-  'Subject',
-  'Date'
-];
+    'From',
+    'To',
+    'Delivered-To',
+    'Return-Path',
+    'Received-SPF',
+    'Subject',
+    'Date'
+  ];
 
   const lines = header.split('\n');
   const result = {};
@@ -39,7 +45,7 @@ app.post('/analyze', async (req, res) => {
     }
   });
 
-  // ✅ Extract pass/fail status
+  // Extract pass/fail statuses
   const spfMatch = header.match(/spf=(\w+)/i);
   const dkimMatch = header.match(/dkim=(\w+)/i);
   const dmarcMatch = header.match(/dmarc=(\w+)/i);
@@ -52,40 +58,33 @@ app.post('/analyze', async (req, res) => {
   result['DKIM Status'] = dkimStatus;
   result['DMARC Status'] = dmarcStatus;
 
-  // ✅ Safe Meter
   if (spfStatus === 'pass' && dkimStatus === 'pass' && dmarcStatus === 'pass') {
-    result['Safe Meter'] = '✅ Safe – All security checks passed';
+    result['Safe Meter'] = '✅ Safe – All checks passed';
   } else if (
     (spfStatus === 'pass' && dkimStatus === 'pass') ||
     (spfStatus === 'pass' && dmarcStatus === 'pass') ||
     (dkimStatus === 'pass' && dmarcStatus === 'pass')
   ) {
-    result['Safe Meter'] = '⚠️ Risk – Partial pass, email might be legit';
+    result['Safe Meter'] = '⚠️ Risk – Partial checks passed';
   } else {
-    result['Safe Meter'] = '❌ Unsafe – Failed checks, could be spoofed';
+    result['Safe Meter'] = '❌ Unsafe – Failed checks';
   }
 
-  // ✅ Sender IP detection
-  const receivedMatch = header.match(/Received:.*\[(\d{1,3}(?:\.\d{1,3}){3})\]/);
-  if (receivedMatch && receivedMatch[1]) {
-    const senderIP = receivedMatch[1];
-    result['Sender IP'] = senderIP;
-
+  // IP Geolocation
+  const senderIP = extractSenderIP(header);
+  if (senderIP) {
     try {
-      const geoRes = await fetch(`http://ip-api.com/json/${senderIP}`);
-      const geoData = await geoRes.json();
-
-      if (geoData.status === 'success') {
-        result['Sender Location'] = `${geoData.city}, ${geoData.regionName}, ${geoData.country}`;
-        result['ISP'] = geoData.isp;
-      } else {
-        result['Sender Location'] = 'Unknown';
-      }
+      const geoResponse = await fetch(`http://ip-api.com/json/${senderIP}`);
+      const geoData = await geoResponse.json();
+      result['Sender IP'] = senderIP;
+      result['IP Location'] = `${geoData.city}, ${geoData.regionName}, ${geoData.country}`;
     } catch (err) {
-      result['Sender Location'] = 'Lookup failed';
+      result['Sender IP'] = senderIP;
+      result['IP Location'] = '❌ Failed to lookup location';
     }
   } else {
     result['Sender IP'] = 'Not found';
+    result['IP Location'] = 'N/A';
   }
 
   res.json(result);

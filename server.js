@@ -1,24 +1,15 @@
 const express = require('express');
 const cors = require('cors');
 const fetch = require('node-fetch');
+
 const app = express();
 const PORT = process.env.PORT || 10000;
 
-app.use(cors({ origin: 'https://email-header-frontend.onrender.com' }));
+app.use(cors({
+  origin: 'https://email-header-frontend.onrender.com'  // Replace with your frontend domain if needed
+}));
 app.use(express.json());
 app.use(express.static('public'));
-
-function extractSenderIP(header) {
-  const ipRegex = /Received:.*\[(\d{1,3}(?:\.\d{1,3}){3})\]/g;
-  let match;
-  while ((match = ipRegex.exec(header)) !== null) {
-    const ip = match[1];
-    if (!ip.startsWith('10.') && !ip.startsWith('192.168.') && !ip.startsWith('172.')) {
-      return ip;
-    }
-  }
-  return null;
-}
 
 app.post('/analyze', async (req, res) => {
   const header = req.body.header;
@@ -28,14 +19,9 @@ app.post('/analyze', async (req, res) => {
   }
 
   const importantKeys = [
-    'Delivered-To',
-    'Received-SPF',
-    'Authentication-Results',
-    'Return-Path',
-    'DKIM-Signature',
-    'ARC-Authentication-Results',
-    'ARC-Message-Signature',
-    'ARC-Seal'
+    'Delivered-To', 'Received-SPF', 'Authentication-Results',
+    'Return-Path', 'DKIM-Signature', 'ARC-Authentication-Results',
+    'ARC-Message-Signature', 'ARC-Seal'
   ];
 
   const lines = header.split('\n');
@@ -49,45 +35,58 @@ app.post('/analyze', async (req, res) => {
     }
   });
 
-  // Status checks
-  const spfStatus = (header.match(/spf=(\w+)/i)?.[1] || 'not found').toLowerCase();
-  const dkimStatus = (header.match(/dkim=(\w+)/i)?.[1] || 'not found').toLowerCase();
-  const dmarcStatus = (header.match(/dmarc=(\w+)/i)?.[1] || 'not found').toLowerCase();
+  // ✅ Extract pass/fail status
+  const spfMatch = header.match(/spf=(\w+)/i);
+  const dkimMatch = header.match(/dkim=(\w+)/i);
+  const dmarcMatch = header.match(/dmarc=(\w+)/i);
+
+  const spfStatus = spfMatch ? spfMatch[1].toLowerCase() : 'not found';
+  const dkimStatus = dkimMatch ? dkimMatch[1].toLowerCase() : 'not found';
+  const dmarcStatus = dmarcMatch ? dmarcMatch[1].toLowerCase() : 'not found';
 
   result['SPF Status'] = spfStatus;
   result['DKIM Status'] = dkimStatus;
   result['DMARC Status'] = dmarcStatus;
 
-  // Safe Meter
+  // ✅ Safe Meter
   if (spfStatus === 'pass' && dkimStatus === 'pass' && dmarcStatus === 'pass') {
     result['Safe Meter'] = '✅ Safe – All security checks passed';
-  } else if ([spfStatus, dkimStatus, dmarcStatus].filter(v => v === 'pass').length >= 2) {
-    result['Safe Meter'] = '⚠️ Risk – Partial pass, may be legit';
+  } else if (
+    (spfStatus === 'pass' && dkimStatus === 'pass') ||
+    (spfStatus === 'pass' && dmarcStatus === 'pass') ||
+    (dkimStatus === 'pass' && dmarcStatus === 'pass')
+  ) {
+    result['Safe Meter'] = '⚠️ Risk – Partial pass, email might be legit';
   } else {
-    result['Safe Meter'] = '❌ Unsafe – Likely spoofed or spam';
+    result['Safe Meter'] = '❌ Unsafe – Failed checks, could be spoofed';
   }
 
-  // Extract sender IP
-  const senderIP = extractSenderIP(header);
-  result['Sender IP'] = senderIP || 'Not found';
+  // ✅ Sender IP detection
+  const receivedMatch = header.match(/Received:.*\[(\d{1,3}(?:\.\d{1,3}){3})\]/);
+  if (receivedMatch && receivedMatch[1]) {
+    const senderIP = receivedMatch[1];
+    result['Sender IP'] = senderIP;
 
-  // IP location lookup
-  if (senderIP) {
     try {
-      const geoRes = await fetch(`https://ipapi.co/${senderIP}/json/`);
+      const geoRes = await fetch(`http://ip-api.com/json/${senderIP}`);
       const geoData = await geoRes.json();
 
-      result['Sender Location'] = geoData.city
-        ? `${geoData.city}, ${geoData.region}, ${geoData.country_name}`
-        : 'Location not found';
+      if (geoData.status === 'success') {
+        result['Sender Location'] = `${geoData.city}, ${geoData.regionName}, ${geoData.country}`;
+        result['ISP'] = geoData.isp;
+      } else {
+        result['Sender Location'] = 'Unknown';
+      }
     } catch (err) {
-      result['Sender Location'] = 'Error fetching location';
+      result['Sender Location'] = 'Lookup failed';
     }
+  } else {
+    result['Sender IP'] = 'Not found';
   }
 
   res.json(result);
 });
 
 app.listen(PORT, () => {
-  console.log(`✅ Server running on http://localhost:${PORT}`);
+  console.log(`✅ Server running at http://localhost:${PORT}`);
 });

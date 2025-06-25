@@ -11,7 +11,6 @@ app.use(cors({
 app.use(express.json());
 app.use(express.static('public'));
 
-// ✅ POST /analyze route
 app.post('/analyze', (req, res) => {
   const header = req.body.header;
 
@@ -19,19 +18,53 @@ app.post('/analyze', (req, res) => {
     return res.status(400).json({ error: 'No header provided' });
   }
 
+  const importantKeys = [
+    'Delivered-To',
+    'Received-SPF',
+    'Authentication-Results',
+    'Return-Path',
+    'DKIM-Signature',
+    'ARC-Authentication-Results',
+    'ARC-Message-Signature',
+    'ARC-Seal'
+  ];
+
   const lines = header.split('\n');
   const result = {};
 
   lines.forEach(line => {
     const [key, ...rest] = line.split(':');
-    if (key && rest.length > 0) {
-      result[key.trim()] = rest.join(':').trim();
+    const trimmedKey = key.trim();
+    if (importantKeys.includes(trimmedKey) && rest.length > 0) {
+      result[trimmedKey] = rest.join(':').trim();
     }
   });
 
-  res.json(result);
-});
+  // Extract pass/fail
+  const spfMatch = header.match(/spf=(\w+)/i);
+  const dkimMatch = header.match(/dkim=(\w+)/i);
+  const dmarcMatch = header.match(/dmarc=(\w+)/i);
 
-app.listen(PORT, () => {
-  console.log(`✅ Server running at http://localhost:${PORT}`);
+  const spfStatus = spfMatch ? spfMatch[1].toLowerCase() : 'not found';
+  const dkimStatus = dkimMatch ? dkimMatch[1].toLowerCase() : 'not found';
+  const dmarcStatus = dmarcMatch ? dmarcMatch[1].toLowerCase() : 'not found';
+
+  result['SPF Status'] = spfStatus;
+  result['DKIM Status'] = dkimStatus;
+  result['DMARC Status'] = dmarcStatus;
+
+  // Safe Meter Logic
+  if (spfStatus === 'pass' && dkimStatus === 'pass' && dmarcStatus === 'pass') {
+    result['Safe Meter'] = '✅ Safe – All security checks passed';
+  } else if (
+    (spfStatus === 'pass' && dkimStatus === 'pass') ||
+    (spfStatus === 'pass' && dmarcStatus === 'pass') ||
+    (dkimStatus === 'pass' && dmarcStatus === 'pass')
+  ) {
+    result['Safe Meter'] = '⚠️ Risk – Partial pass, email might be legit';
+  } else {
+    result['Safe Meter'] = '❌ Unsafe – Failed checks, could be spoofed';
+  }
+
+  res.json(result);
 });

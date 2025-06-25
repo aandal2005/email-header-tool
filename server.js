@@ -19,10 +19,14 @@ app.post('/analyze', async (req, res) => {
   }
 
   const importantKeys = [
-    'Delivered-To', 'Received-SPF', 'Authentication-Results',
-    'Return-Path', 'DKIM-Signature', 'ARC-Authentication-Results',
-    'ARC-Message-Signature', 'ARC-Seal'
-  ];
+  'From',
+  'To',
+  'Delivered-To',
+  'Return-Path',
+  'Received-SPF',
+  'Subject',
+  'Date'
+];
 
   const lines = header.split('\n');
   const result = {};

@@ -34,6 +34,13 @@
   <h2>Email Header Analyzer</h2>
   <textarea id="headerInput" placeholder="Paste your email header here..."></textarea><br>
   <button onclick="analyzeHeader()">Analyze</button>
+<button onclick="loadHistory()">📜 View History</button>
+
+<div id="history" style="margin-top: 30px;">
+  <h3>Search History</h3>
+  <table id="historyTable" border="1" style="width:100%; border-collapse: collapse;"></table>
+</div>
+
 
   <h3>Result:</h3>
   <div id="result" style="margin-top: 20px;"></div>

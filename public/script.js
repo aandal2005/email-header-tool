@@ -2,68 +2,47 @@ const BACKEND_URL = 'https://email-header-backend.onrender.com';
 
 // Analyze email header
 function analyzeHeader() {
-  const header = document.getElementById('headerInput').value;
-
-  if (!header.trim()) {
-    document.getElementById('result').innerHTML = '<p style="color:red;">❌ Please paste an email header.</p>';
+  const input = document.getElementById('headerInput').value.trim();
+  const resultDiv = document.getElementById('result');
+  resultDiv.innerHTML = '';
+  if (!input) {
+    resultDiv.innerHTML = '<p style="color:red;">❌ Please paste an email header.</p>';
     return;
   }
 
   fetch(`${BACKEND_URL}/api/analyze`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ header })
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ header: input })
   })
     .then(response => response.json())
     .then(data => {
-      const resultContainer = document.getElementById('result');
-      resultContainer.innerHTML = '';
-
       if (data.error) {
-        resultContainer.innerHTML = `<p style="color:red;">❌ ${data.error}</p>`;
-        return;
+        resultDiv.innerHTML = `<p style="color:red;">❌ ${data.error}</p>`;
+      } else {
+        resultDiv.innerHTML = `
+          <h4>Result:</h4>
+          <pre>${JSON.stringify(data, null, 2)}</pre>
+        `;
+        fetchHistory(); // Auto-refresh history after analysis
       }
-
-      const table = document.createElement('table');
-      table.style.borderCollapse = 'collapse';
-      table.style.width = '100%';
-
-      Object.entries(data).forEach(([key, value]) => {
-        const row = document.createElement('tr');
-
-        const keyCell = document.createElement('td');
-        keyCell.textContent = key;
-        keyCell.style.border = '1px solid #ccc';
-        keyCell.style.padding = '8px';
-        keyCell.style.fontWeight = 'bold';
-        keyCell.style.backgroundColor = '#f0f0f0';
-
-        const valueCell = document.createElement('td');
-        valueCell.textContent = value;
-        valueCell.style.border = '1px solid #ccc';
-        valueCell.style.padding = '8px';
-
-        row.appendChild(keyCell);
-        row.appendChild(valueCell);
-        table.appendChild(row);
-      });
-
-      resultContainer.appendChild(table);
-      fetchHistory(); // Update history
     })
     .catch(error => {
       console.error('❌ Analyze error:', error);
-      document.getElementById('result').innerHTML = '<p style="color:red;">❌ Failed to analyze header.</p>';
+      resultDiv.innerHTML = '<p style="color:red;">❌ Failed to analyze header.</p>';
     });
 }
 
-// Fetch and display history
+// Fetch history from backend and display
 function fetchHistory() {
   fetch(`${BACKEND_URL}/api/history`)
     .then(response => response.json())
     .then(history => {
       const historyDiv = document.getElementById('history');
-      historyDiv.innerHTML = '';
+      historyDiv.style.display = 'block'; // Ensure it's visible
+      historyDiv.innerHTML = ''; // Clear old history
 
       if (!history || history.length === 0) {
         historyDiv.innerHTML = '<p>No history found.</p>';
@@ -75,7 +54,6 @@ function fetchHistory() {
       table.style.width = '100%';
       table.style.marginTop = '20px';
 
-      // Table header
       const headerRow = document.createElement('tr');
       ['From', 'To', 'Subject', 'Date', 'SPF', 'DKIM', 'DMARC', 'Safe Meter', 'IP', 'Location'].forEach(text => {
         const th = document.createElement('th');
@@ -88,14 +66,9 @@ function fetchHistory() {
       });
       table.appendChild(headerRow);
 
-      // Table body
       history.forEach(item => {
         const row = document.createElement('tr');
-        [
-          item.from, item.to, item.subject, item.date,
-          item.spf, item.dkim, item.dmarc, item.safeMeter,
-          item.senderIP, item.ipLocation
-        ].forEach(text => {
+        [item.from, item.to, item.subject, item.date, item.spf, item.dkim, item.dmarc, item.safeMeter, item.senderIP, item.ipLocation].forEach(text => {
           const cell = document.createElement('td');
           cell.textContent = text || '—';
           cell.style.border = '1px solid #ccc';
@@ -108,14 +81,27 @@ function fetchHistory() {
       historyDiv.appendChild(table);
     })
     .catch(error => {
-      console.error('❌ Fetch history error:', error);
+      console.error('❌ Error fetching history:', error);
       document.getElementById('history').innerHTML = '<p style="color:red;">❌ Error fetching history.</p>';
     });
 }
 
-// Attach functions to window for HTML buttons
-window.analyzeHeader = analyzeHeader;
-window.fetchHistory = fetchHistory;
+// ✅ View History - only show if hidden or empty
+function viewHistory() {
+  const historyDiv = document.getElementById('history');
+  if (historyDiv.style.display === 'none' || historyDiv.innerHTML === '') {
+    fetchHistory(); // Only fetch if hidden or empty
+  } else {
+    historyDiv.style.display = 'block'; // Just ensure it's shown
+  }
+}
 
-// Auto-load history
-window.onload = fetchHistory;
+// ✅ Refresh History - always re-fetch
+function refreshHistory() {
+  fetchHistory();
+}
+
+// 🔘 Attach button events
+document.getElementById('analyzeBtn').addEventListener('click', analyzeHeader);
+document.getElementById('viewBtn').addEventListener('click', viewHistory);
+document.getElementById('refreshBtn').addEventListener('click', refreshHistory);

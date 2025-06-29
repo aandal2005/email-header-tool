@@ -1,48 +1,33 @@
 const BACKEND_URL = 'https://email-header-backend.onrender.com';
 
-// Analyze email header
+// Analyze header function
 function analyzeHeader() {
-  const input = document.getElementById('headerInput').value.trim();
-  const resultDiv = document.getElementById('result');
-  resultDiv.innerHTML = '';
-  if (!input) {
-    resultDiv.innerHTML = '<p style="color:red;">❌ Please paste an email header.</p>';
-    return;
-  }
+  const header = document.getElementById('headerInput').value.trim();
+  if (!header) return alert('Please paste an email header.');
 
   fetch(`${BACKEND_URL}/api/analyze`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({ header: input })
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ header })
   })
-    .then(response => response.json())
+    .then(res => res.json())
     .then(data => {
-      if (data.error) {
-        resultDiv.innerHTML = `<p style="color:red;">❌ ${data.error}</p>`;
-      } else {
-        resultDiv.innerHTML = `
-          <h4>Result:</h4>
-          <pre>${JSON.stringify(data, null, 2)}</pre>
-        `;
-        fetchHistory(); // Auto-refresh history after analysis
-      }
+      document.getElementById('result').textContent = JSON.stringify(data, null, 2);
     })
-    .catch(error => {
-      console.error('❌ Analyze error:', error);
-      resultDiv.innerHTML = '<p style="color:red;">❌ Failed to analyze header.</p>';
+    .catch(err => {
+      console.error('❌ Analyze error:', err);
+      document.getElementById('result').textContent = '❌ Failed to analyze header.';
     });
 }
 
-// Fetch history from backend and display
+// Fetch history from backend
 function fetchHistory() {
   fetch(`${BACKEND_URL}/api/history`)
     .then(response => response.json())
     .then(history => {
       const historyDiv = document.getElementById('history');
-      historyDiv.style.display = 'block'; // Ensure it's visible
-      historyDiv.innerHTML = ''; // Clear old history
+      historyDiv.style.display = 'block';
+      historyDiv.innerHTML = '';
 
       if (!history || history.length === 0) {
         historyDiv.innerHTML = '<p>No history found.</p>';
@@ -52,7 +37,6 @@ function fetchHistory() {
       const table = document.createElement('table');
       table.style.borderCollapse = 'collapse';
       table.style.width = '100%';
-      table.style.marginTop = '20px';
 
       const headerRow = document.createElement('tr');
       ['From', 'To', 'Subject', 'Date', 'SPF', 'DKIM', 'DMARC', 'Safe Meter', 'IP', 'Location'].forEach(text => {
@@ -86,22 +70,21 @@ function fetchHistory() {
     });
 }
 
-// ✅ View History - only show if hidden or empty
+// Toggle history display
 function viewHistory() {
   const historyDiv = document.getElementById('history');
   if (historyDiv.style.display === 'none' || historyDiv.innerHTML === '') {
-    fetchHistory(); // Only fetch if hidden or empty
+    fetchHistory();
   } else {
-    historyDiv.style.display = 'block'; // Just ensure it's shown
+    historyDiv.style.display = 'none';
   }
 }
 
-// ✅ Refresh History - always re-fetch
+// Refresh history forcibly
 function refreshHistory() {
   fetchHistory();
 }
 
-// 🔘 Attach button events
-document.getElementById('analyzeBtn').addEventListener('click', analyzeHeader);
+// Bind buttons
 document.getElementById('viewBtn').addEventListener('click', viewHistory);
 document.getElementById('refreshBtn').addEventListener('click', refreshHistory);

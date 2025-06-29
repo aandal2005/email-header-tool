@@ -2,6 +2,9 @@
 const mongoose = require('mongoose');
 const express = require('express');
 const cors = require('cors');
+app.use(cors({
+  origin: 'https://email-header-frontend.onrender.com'
+}));
 const fetch = require('node-fetch');
 
 const app = express();

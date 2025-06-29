@@ -1,6 +1,6 @@
-/const BACKEND_URL = 'https://email-header-backend.onrender.com';
+const BACKEND_URL = 'https://email-header-backend.onrender.com';
 
-// Analyze the email header
+// Analyze email header
 function analyzeHeader() {
   const header = document.getElementById('headerInput').value;
 
@@ -10,7 +10,6 @@ function analyzeHeader() {
   }
 
   fetch(`${BACKEND_URL}/api/analyze`, {
-
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ header })
@@ -18,7 +17,7 @@ function analyzeHeader() {
     .then(response => response.json())
     .then(data => {
       const resultContainer = document.getElementById('result');
-      resultContainer.innerHTML = ''; // Clear old result
+      resultContainer.innerHTML = '';
 
       if (data.error) {
         resultContainer.innerHTML = `<p style="color:red;">❌ ${data.error}</p>`;
@@ -50,22 +49,21 @@ function analyzeHeader() {
       });
 
       resultContainer.appendChild(table);
-      fetchHistory(); // Refresh history after analyzing
+      fetchHistory(); // Update history
     })
     .catch(error => {
-      console.error('Error:', error);
+      console.error('❌ Analyze error:', error);
       document.getElementById('result').innerHTML = '<p style="color:red;">❌ Failed to analyze header.</p>';
     });
 }
 
-// Fetch and display email header history
+// Fetch and display history
 function fetchHistory() {
-     fetch(`${BACKEND_URL}/api/history`)
-
+  fetch(`${BACKEND_URL}/api/history`)
     .then(response => response.json())
     .then(history => {
       const historyDiv = document.getElementById('history');
-      historyDiv.innerHTML = ''; // Clear old history
+      historyDiv.innerHTML = '';
 
       if (!history || history.length === 0) {
         historyDiv.innerHTML = '<p>No history found.</p>';
@@ -90,7 +88,7 @@ function fetchHistory() {
       });
       table.appendChild(headerRow);
 
-      // History rows
+      // Table body
       history.forEach(item => {
         const row = document.createElement('tr');
         [
@@ -110,15 +108,14 @@ function fetchHistory() {
       historyDiv.appendChild(table);
     })
     .catch(error => {
-      console.error('❌ Failed to fetch history:', error);
+      console.error('❌ Fetch history error:', error);
       document.getElementById('history').innerHTML = '<p style="color:red;">❌ Error fetching history.</p>';
     });
 }
 
-// Event listeners
-document.getElementById('analyzeBtn').addEventListener('click', analyzeHeader);
-document.getElementById('refreshBtn').addEventListener('click', fetchHistory);
+// Attach functions to window for HTML buttons
+window.analyzeHeader = analyzeHeader;
+window.fetchHistory = fetchHistory;
 
-// Auto-fetch history on page load
+// Auto-load history
 window.onload = fetchHistory;
-

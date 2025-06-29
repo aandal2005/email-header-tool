@@ -5,47 +5,116 @@
   <title>Email Header Analyzer</title>
   <style>
     body {
-      font-family: Arial, sans-serif;
-      padding: 20px;
+      font-family: 'Segoe UI', sans-serif;
+      background-color: #f3f4f6;
+      margin: 0;
+      padding: 0;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 40px auto;
+      background: #ffffff;
+      border-radius: 10px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+      padding: 30px;
+    }
+
+    h2 {
+      text-align: center;
+      margin-bottom: 30px;
+      color: #333;
     }
 
     textarea {
       width: 100%;
-      height: 200px;
+      height: 180px;
+      padding: 12px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      font-family: monospace;
+      font-size: 14px;
+      resize: vertical;
+    }
+
+    .btn-group {
+      margin-top: 20px;
+      text-align: center;
     }
 
     button {
-      padding: 10px 20px;
-      margin: 10px 5px 0 0;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      padding: 10px 18px;
+      margin: 8px;
+      border-radius: 6px;
       cursor: pointer;
+      font-size: 14px;
+      transition: background-color 0.3s ease;
     }
 
-    #history {
-      display: none;
+    button:hover {
+      background-color: #3f9142;
+    }
+
+    .result, .history {
       margin-top: 30px;
+      overflow-x: auto;
     }
 
-    pre {
-      background-color: #f4f4f4;
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin-top: 10px;
+    }
+
+    th, td {
+      border: 1px solid #ddd;
       padding: 10px;
-      border: 1px solid #ccc;
-      white-space: pre-wrap;
-      margin-top: 20px;
+      text-align: left;
+    }
+
+    th {
+      background-color: #f0f0f0;
+      font-weight: bold;
+    }
+
+    .no-history {
+      text-align: center;
+      padding: 10px;
+      color: #888;
+    }
+
+    .hidden {
+      display: none;
     }
   </style>
 </head>
 <body>
 
-  <h2>Email Header Analyzer</h2>
-  <textarea id="headerInput" placeholder="Paste your email header here..."></textarea><br>
-  <button onclick="analyzeHeader()">Analyze</button>
-  <button id="viewBtn">📜 View History</button>
-  <button id="refreshBtn">🔄 Refresh History</button>
+  <div class="container">
+    <h2>Email Header Analyzer</h2>
 
-  <div id="history"></div>
+    <textarea id="headerInput" placeholder="Paste your email header here..."></textarea>
 
-  <h3>Result:</h3>
-  <pre id="result"></pre>
+    <div class="btn-group">
+      <button id="analyzeBtn">🔍 Analyze</button>
+      <button id="viewBtn">📜 View History</button>
+      <button id="refreshBtn">🔄 Refresh</button>
+      <button id="clearBtn">🗑️ Clear History</button>
+    </div>
+
+    <div class="result">
+      <h3>Result:</h3>
+      <div id="result"></div>
+    </div>
+
+    <div class="history">
+      <h3>History:</h3>
+      <div id="history" class="hidden"></div>
+    </div>
+  </div>
 
   <script src="script.js"></script>
 </body>

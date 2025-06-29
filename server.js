@@ -2,97 +2,98 @@ const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
 const dotenv = require('dotenv');
-const fetch = require('node-fetch'); // for IP location
+const fetch = require('node-fetch');
+const EmailHeader = require('./models/EmailHeader');
 
-dotenv.config(); // ✅ Load .env variables
+dotenv.config();
 
 const app = express();
-
 app.use(cors({
-  origin: 'https://email-header-frontend.onrender.com' // ✅ Allow frontend
+  origin: 'https://email-header-frontend.onrender.com'
 }));
 app.use(express.json());
 
-// ✅ Connect to MongoDB
-// Connect to MongoDB (clean version)
+// Connect to MongoDB
 mongoose.connect(process.env.MONGO_URI)
-  .then(() => console.log('✅ Connected to MongoDB'))
+  .then(() => console.log('✅ MongoDB Connected'))
   .catch(err => console.error('❌ MongoDB connection error:', err));
 
-// ✅ Mongoose Schema
-const HeaderSchema = new mongoose.Schema({
-  from: String,
-  to: String,
-  subject: String,
-  date: String,
-  spf: String,
-  dkim: String,
-  dmarc: String,
-  safeMeter: String,
-  senderIP: String,
-  ipLocation: String
-});
-
-const Header = mongoose.model('Header', HeaderSchema);
-
-// ✅ Extract IP from header
+// Extract sender IP from header (simple match)
 function extractSenderIP(header) {
   const match = header.match(/\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b/);
   return match ? match[0] : 'Unknown';
 }
 
-// ✅ /api/analyze
-app.post('/api/analyze', async (req, res) => {
-  try {
-    const { header } = req.body;
-    if (!header) return res.status(400).json({ error: 'Missing email header' });
+// Rate email based on authentication
+function getSafeMeter(spf, dkim, dmarc) {
+  const passed = [spf, dkim, dmarc].filter(r => r === 'pass').length;
+  if (passed === 3) return 'Safe';
+  if (passed === 2) return 'Moderate';
+  return 'Unsafe';
+}
 
-    // Dummy logic (replace with real analysis if needed)
-    const from = header.match(/From:\s(.+)/i)?.[1] || 'Unknown';
-    const to = header.match(/To:\s(.+)/i)?.[1] || 'Unknown';
-    const subject = header.match(/Subject:\s(.+)/i)?.[1] || 'Unknown';
-    const date = header.match(/Date:\s(.+)/i)?.[1] || 'Unknown';
-    const spf = header.includes('spf=pass') ? 'pass' : 'fail';
-    const dkim = header.includes('dkim=pass') ? 'pass' : 'fail';
-    const dmarc = header.includes('dmarc=pass') ? 'pass' : 'fail';
-    const safeMeter = (spf === 'pass' && dkim === 'pass' && dmarc === 'pass') ? 'Safe' : 'Unsafe';
+// Analyze Header
+app.post('/api/analyze', async (req, res) => {
+  const header = req.body.header;
+  if (!header) return res.status(400).json({ error: 'Header is required' });
+
+  try {
+    const from = (header.match(/From: (.*)/) || [])[1] || 'Unknown';
+    const to = (header.match(/To: (.*)/) || [])[1] || 'Unknown';
+    const subject = (header.match(/Subject: (.*)/) || [])[1] || 'Unknown';
+    const date = (header.match(/Date: (.*)/) || [])[1] || 'Unknown';
+    const spf = /spf=pass/.test(header) ? 'pass' : 'fail';
+    const dkim = /dkim=pass/.test(header) ? 'pass' : 'fail';
+    const dmarc = /dmarc=pass/.test(header) ? 'pass' : 'fail';
 
     const senderIP = extractSenderIP(header);
-
-    // Get location
     let ipLocation = 'Unknown';
     try {
       const ipRes = await fetch(`http://ip-api.com/json/${senderIP}`);
       const ipData = await ipRes.json();
-      ipLocation = ipData?.country || 'Unknown';
-    } catch (err) {
-      console.warn('⚠️ Failed IP lookup:', err);
+      ipLocation = ipData.country || 'Unknown';
+    } catch (e) {
+      console.warn('⚠️ IP location fetch failed');
     }
 
-    // Save to DB
-    const saved = await Header.create({
-      from, to, subject, date, spf, dkim, dmarc, safeMeter, senderIP, ipLocation
+    const safeMeter = getSafeMeter(spf, dkim, dmarc);
+
+    const newHeader = new EmailHeader({
+      from, to, subject, date, spf, dkim, dmarc,
+      safeMeter, senderIP, ipLocation
     });
 
-    res.json(saved);
+    await newHeader.save();
+
+    res.json({ from, to, subject, date, spf, dkim, dmarc, safeMeter, senderIP, ipLocation });
   } catch (error) {
     console.error('❌ Analyze Error:', error);
-    res.status(500).json({ error: 'Internal Server Error' });
+    res.status(500).json({ error: 'Server error during analysis' });
   }
 });
 
-// ✅ /api/history
+// View all history
 app.get('/api/history', async (req, res) => {
   try {
-    const data = await Header.find().sort({ _id: -1 }).limit(20);
-    res.json(data);
-  } catch (err) {
+    const history = await EmailHeader.find().sort({ createdAt: -1 });
+    res.json(history);
+  } catch (error) {
+    console.error('❌ History Fetch Error:', error);
     res.status(500).json({ error: 'Failed to fetch history' });
   }
 });
 
-// ✅ Start server
-const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+// ✅ Clear all history
+app.delete('/api/history', async (req, res) => {
+  try {
+    await EmailHeader.deleteMany({});
+    res.json({ message: 'All history cleared.' });
+  } catch (error) {
+    console.error('❌ Clear Error:', error);
+    res.status(500).json({ error: 'Failed to clear history.' });
+  }
 });
+
+// Start server
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));

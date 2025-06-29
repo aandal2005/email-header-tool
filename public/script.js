@@ -1,26 +1,46 @@
+// Replace BACKEND_URL with your backend URL
 const BACKEND_URL = 'https://email-header-backend.onrender.com';
 
-// Analyze header function
+// Analyze email header
 function analyzeHeader() {
-  const header = document.getElementById('headerInput').value.trim();
-  if (!header) return alert('Please paste an email header.');
+  const headerText = document.getElementById('headerInput').value;
+  if (!headerText.trim()) {
+    alert('Please paste an email header.');
+    return;
+  }
 
   fetch(`${BACKEND_URL}/api/analyze`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ header })
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ header: headerText })
   })
     .then(res => res.json())
     .then(data => {
-      document.getElementById('result').textContent = JSON.stringify(data, null, 2);
+      const resultDiv = document.getElementById('result');
+      resultDiv.innerHTML = `
+        <table border="1" style="border-collapse: collapse; margin-top: 10px; width: 100%;">
+          <tr><th>From</th><td>${data.from}</td></tr>
+          <tr><th>To</th><td>${data.to}</td></tr>
+          <tr><th>Subject</th><td>${data.subject}</td></tr>
+          <tr><th>Date</th><td>${data.date}</td></tr>
+          <tr><th>SPF</th><td>${data.spf}</td></tr>
+          <tr><th>DKIM</th><td>${data.dkim}</td></tr>
+          <tr><th>DMARC</th><td>${data.dmarc}</td></tr>
+          <tr><th>Safe Meter</th><td>${data.safeMeter}</td></tr>
+          <tr><th>IP</th><td>${data.senderIP}</td></tr>
+          <tr><th>Location</th><td>${data.ipLocation}</td></tr>
+        </table>
+      `;
     })
-    .catch(err => {
-      console.error('❌ Analyze error:', err);
-      document.getElementById('result').textContent = '❌ Failed to analyze header.';
+    .catch(error => {
+      console.error('❌ Analyze error:', error);
+      document.getElementById('result').innerHTML = '<p style="color:red;">❌ Failed to analyze header.</p>';
     });
 }
 
-// Fetch history from backend
+// Fetch history from backend and display
 function fetchHistory() {
   fetch(`${BACKEND_URL}/api/history`)
     .then(response => response.json())
@@ -37,6 +57,7 @@ function fetchHistory() {
       const table = document.createElement('table');
       table.style.borderCollapse = 'collapse';
       table.style.width = '100%';
+      table.style.marginTop = '20px';
 
       const headerRow = document.createElement('tr');
       ['From', 'To', 'Subject', 'Date', 'SPF', 'DKIM', 'DMARC', 'Safe Meter', 'IP', 'Location'].forEach(text => {
@@ -70,21 +91,21 @@ function fetchHistory() {
     });
 }
 
-// Toggle history display
+// View History - only show if hidden
 function viewHistory() {
   const historyDiv = document.getElementById('history');
   if (historyDiv.style.display === 'none' || historyDiv.innerHTML === '') {
     fetchHistory();
   } else {
-    historyDiv.style.display = 'none';
+    historyDiv.style.display = 'block';
   }
 }
 
-// Refresh history forcibly
+// Refresh History - always re-fetch
 function refreshHistory() {
   fetchHistory();
 }
 
-// Bind buttons
+// Attach buttons
 document.getElementById('viewBtn').addEventListener('click', viewHistory);
 document.getElementById('refreshBtn').addEventListener('click', refreshHistory);

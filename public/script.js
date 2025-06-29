@@ -1,8 +1,16 @@
+/const BACKEND_URL = 'https://email-header-backend.onrender.com';
+
 // Analyze the email header
 function analyzeHeader() {
   const header = document.getElementById('headerInput').value;
 
-  fetch('https://email-header-backend.onrender.com/analyze', {
+  if (!header.trim()) {
+    document.getElementById('result').innerHTML = '<p style="color:red;">❌ Please paste an email header.</p>';
+    return;
+  }
+
+  fetch(`${BACKEND_URL}/api/analyze`, {
+
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ header })
@@ -52,13 +60,14 @@ function analyzeHeader() {
 
 // Fetch and display email header history
 function fetchHistory() {
-  fetch('https://email-header-backend.onrender.com/history')
+     fetch(`${BACKEND_URL}/api/history`)
+
     .then(response => response.json())
     .then(history => {
       const historyDiv = document.getElementById('history');
-      historyDiv.innerHTML = ''; // clear old history
+      historyDiv.innerHTML = ''; // Clear old history
 
-      if (history.length === 0) {
+      if (!history || history.length === 0) {
         historyDiv.innerHTML = '<p>No history found.</p>';
         return;
       }
@@ -106,5 +115,10 @@ function fetchHistory() {
     });
 }
 
-// Auto-fetch history when page loads
+// Event listeners
+document.getElementById('analyzeBtn').addEventListener('click', analyzeHeader);
+document.getElementById('refreshBtn').addEventListener('click', fetchHistory);
+
+// Auto-fetch history on page load
 window.onload = fetchHistory;
+

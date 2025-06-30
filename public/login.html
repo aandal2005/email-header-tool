@@ -60,8 +60,6 @@
             localStorage.setItem('token', data.token);
             localStorage.setItem('role', data.role);
             document.getElementById('loginStatus').innerHTML = `✅ Logged in as ${data.role}`;
-
-            // Redirect to main app
             setTimeout(() => {
               window.location.href = 'index.html';
             }, 1000);
@@ -70,10 +68,11 @@
           }
         })
         .catch(err => {
-          console.error(err);
+          console.error('Login error:', err);
           document.getElementById('loginStatus').innerHTML = '❌ Error logging in';
         });
     }
   </script>
 </body>
 </html>
+

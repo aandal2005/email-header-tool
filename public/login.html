@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Login - Email Header Analyzer</title>
+  <style>
+    body {
+      background: linear-gradient(to right, #3a6186, #89253e);
+      color: white;
+      font-family: Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+    }
+    input {
+      padding: 10px;
+      width: 250px;
+      margin: 10px;
+      border-radius: 5px;
+      border: none;
+    }
+    button {
+      padding: 10px 20px;
+      cursor: pointer;
+      background: #fff;
+      color: #333;
+      border: none;
+      border-radius: 5px;
+      font-weight: bold;
+    }
+    #loginStatus {
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <h2>Login to Email Header Analyzer</h2>
+  <input type="text" id="username" placeholder="Username">
+  <input type="password" id="password" placeholder="Password">
+  <button onclick="login()">Login</button>
+  <div id="loginStatus"></div>
+
+  <script>
+    const BACKEND_URL = 'https://email-header-backend.onrender.com';
+
+    function login() {
+      const username = document.getElementById('username').value;
+      const password = document.getElementById('password').value;
+
+      fetch(`${BACKEND_URL}/api/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (data.token) {
+            localStorage.setItem('token', data.token);
+            localStorage.setItem('role', data.role);
+            document.getElementById('loginStatus').innerHTML = `✅ Logged in as ${data.role}`;
+
+            // Redirect to main app
+            setTimeout(() => {
+              window.location.href = 'index.html';
+            }, 1000);
+          } else {
+            document.getElementById('loginStatus').innerHTML = '❌ Login failed';
+          }
+        })
+        .catch(err => {
+          console.error(err);
+          document.getElementById('loginStatus').innerHTML = '❌ Error logging in';
+        });
+    }
+  </script>
+</body>
+</html>

@@ -3,28 +3,34 @@ const cors = require('cors');
 const mongoose = require('mongoose');
 const dotenv = require('dotenv');
 const fetch = require('node-fetch');
+const jwt = require('jsonwebtoken');
+const bcrypt = require('bcrypt');
 const EmailHeader = require('./models/EmailHeader');
+const User = require('./models/User');
 
 dotenv.config();
 
 const app = express();
+
+// CORS for frontend
 app.use(cors({
   origin: 'https://email-header-frontend.onrender.com'
 }));
+
 app.use(express.json());
 
-// Connect to MongoDB
+// Connect MongoDB
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log('✅ MongoDB Connected'))
   .catch(err => console.error('❌ MongoDB connection error:', err));
 
-// Extract sender IP from header (simple match)
+// Extract sender IP
 function extractSenderIP(header) {
   const match = header.match(/\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b/);
   return match ? match[0] : 'Unknown';
 }
 
-// Rate email based on authentication
+// Rate safe meter
 function getSafeMeter(spf, dkim, dmarc) {
   const passed = [spf, dkim, dmarc].filter(r => r === 'pass').length;
   if (passed === 3) return 'Safe';
@@ -32,7 +38,26 @@ function getSafeMeter(spf, dkim, dmarc) {
   return 'Unsafe';
 }
 
-// Analyze Header
+// Login API
+app.post('/api/login', async (req, res) => {
+  const { username, password } = req.body;
+
+  try {
+    const user = await User.findOne({ username });
+    if (!user) return res.status(401).json({ error: 'User not found' });
+
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) return res.status(401).json({ error: 'Incorrect password' });
+
+    const token = jwt.sign({ username: user.username, role: user.role }, 'secretkey', { expiresIn: '1h' });
+    res.json({ token, role: user.role });
+  } catch (error) {
+    console.error('❌ Login Error:', error);
+    res.status(500).json({ error: 'Login failed' });
+  }
+});
+
+// Analyze Email Header
 app.post('/api/analyze', async (req, res) => {
   const header = req.body.header;
   if (!header) return res.status(400).json({ error: 'Header is required' });
@@ -51,7 +76,7 @@ app.post('/api/analyze', async (req, res) => {
     try {
       const ipRes = await fetch(`http://ip-api.com/json/${senderIP}`);
       const ipData = await ipRes.json();
-      ipLocation = ipData.country || 'Unknown';
+      ipLocation = ipData?.country || 'Unknown';
     } catch (e) {
       console.warn('⚠️ IP location fetch failed');
     }
@@ -59,8 +84,7 @@ app.post('/api/analyze', async (req, res) => {
     const safeMeter = getSafeMeter(spf, dkim, dmarc);
 
     const newHeader = new EmailHeader({
-      from, to, subject, date, spf, dkim, dmarc,
-      safeMeter, senderIP, ipLocation
+      from, to, subject, date, spf, dkim, dmarc, safeMeter, senderIP, ipLocation
     });
 
     await newHeader.save();
@@ -72,7 +96,7 @@ app.post('/api/analyze', async (req, res) => {
   }
 });
 
-// View all history
+// Get History
 app.get('/api/history', async (req, res) => {
   try {
     const history = await EmailHeader.find().sort({ createdAt: -1 });
@@ -83,7 +107,7 @@ app.get('/api/history', async (req, res) => {
   }
 });
 
-// ✅ Clear all history
+// Clear History
 app.delete('/api/history', async (req, res) => {
   try {
     await EmailHeader.deleteMany({});

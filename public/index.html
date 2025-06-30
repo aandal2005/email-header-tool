@@ -59,6 +59,12 @@
   </style>
 </head>
 <body>
+<script>
+  if (!localStorage.getItem('token')) {
+    window.location.href = 'login.html';
+  }
+</script>
+
 
   <h2>Email Header Analyzer</h2>
   <textarea id="headerInput" placeholder="Paste your email header here..."></textarea><br>

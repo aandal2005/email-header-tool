@@ -117,6 +117,10 @@ app.delete('/api/history', async (req, res) => {
     res.status(500).json({ error: 'Failed to clear history.' });
   }
 });
+// ✅ Add this test route
+app.get('/api/test', (req, res) => {
+  res.send('Backend is working ✅');
+});
 
 // Start server
 const PORT = process.env.PORT || 10000;

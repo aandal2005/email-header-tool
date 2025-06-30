@@ -56,23 +56,9 @@
     #result, #history {
       margin-top: 20px;
     }
-
-    #loginStatus {
-      margin-top: 10px;
-      font-weight: bold;
-      color: green;
-    }
   </style>
 </head>
 <body>
-
-  <h2>Login</h2>
-  <input type="text" id="username" placeholder="Username">
-  <input type="password" id="password" placeholder="Password">
-  <button onclick="login()">Login</button>
-  <div id="loginStatus"></div>
-
-  <hr><br>
 
   <h2>Email Header Analyzer</h2>
   <textarea id="headerInput" placeholder="Paste your email header here..."></textarea><br>
@@ -86,6 +72,16 @@
 
   <div id="history" style="display: none;"></div>
 
+  <script>
+    // Redirect to login if not authenticated
+    const token = localStorage.getItem("token");
+    if (!token) {
+      alert("⚠️ Please login first.");
+      window.location.href = "login.html";
+    }
+  </script>
+
   <script src="script.js"></script>
 </body>
 </html>
+

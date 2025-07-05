@@ -46,23 +46,18 @@ app.get('/api/test', (req, res) => {
 // ✅ REGISTER API
 app.post('/api/register', async (req, res) => {
   const { username, password } = req.body;
-
   try {
-    const existingUser = await User.findOne({ username });
-    if (existingUser) return res.status(400).json({ error: 'Username already taken' });
+    const existing = await User.findOne({ username });
+    if (existing) return res.status(400).json({ error: "Username already exists" });
 
-    const hashedPassword = await bcrypt.hash(password, 10);
-    const newUser = new User({
-      username,
-      password: hashedPassword,
-      role: 'user' // or 'admin'
-    });
-
+    const hashed = await bcrypt.hash(password, 10);
+    const newUser = new User({ username, password: hashed, role: 'user' });
     await newUser.save();
-    res.status(201).json({ message: 'User registered successfully' });
+
+    res.status(201).json({ message: "User registered successfully" });
   } catch (err) {
-    console.error('❌ Registration Error:', err);
-    res.status(500).json({ error: 'Registration failed' });
+    console.error(err);
+    res.status(500).json({ error: "Server error during registration" });
   }
 });
 

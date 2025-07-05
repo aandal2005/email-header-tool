@@ -38,7 +38,35 @@ function getSafeMeter(spf, dkim, dmarc) {
   return 'Unsafe';
 }
 
-// Login API
+// ✅ Test API
+app.get('/api/test', (req, res) => {
+  res.send('Backend is working ✅');
+});
+
+// ✅ REGISTER API
+app.post('/api/register', async (req, res) => {
+  const { username, password } = req.body;
+
+  try {
+    const existingUser = await User.findOne({ username });
+    if (existingUser) return res.status(400).json({ error: 'Username already taken' });
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const newUser = new User({
+      username,
+      password: hashedPassword,
+      role: 'user' // or 'admin'
+    });
+
+    await newUser.save();
+    res.status(201).json({ message: 'User registered successfully' });
+  } catch (err) {
+    console.error('❌ Registration Error:', err);
+    res.status(500).json({ error: 'Registration failed' });
+  }
+});
+
+// ✅ LOGIN API
 app.post('/api/login', async (req, res) => {
   const { username, password } = req.body;
 
@@ -57,7 +85,7 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
-// Analyze Email Header
+// ✅ ANALYZE HEADER API
 app.post('/api/analyze', async (req, res) => {
   const header = req.body.header;
   if (!header) return res.status(400).json({ error: 'Header is required' });
@@ -73,6 +101,7 @@ app.post('/api/analyze', async (req, res) => {
 
     const senderIP = extractSenderIP(header);
     let ipLocation = 'Unknown';
+
     try {
       const ipRes = await fetch(`http://ip-api.com/json/${senderIP}`);
       const ipData = await ipRes.json();
@@ -96,7 +125,7 @@ app.post('/api/analyze', async (req, res) => {
   }
 });
 
-// Get History
+// ✅ GET HISTORY
 app.get('/api/history', async (req, res) => {
   try {
     const history = await EmailHeader.find().sort({ createdAt: -1 });
@@ -107,7 +136,7 @@ app.get('/api/history', async (req, res) => {
   }
 });
 
-// Clear History
+// ✅ CLEAR HISTORY
 app.delete('/api/history', async (req, res) => {
   try {
     await EmailHeader.deleteMany({});
@@ -117,11 +146,7 @@ app.delete('/api/history', async (req, res) => {
     res.status(500).json({ error: 'Failed to clear history.' });
   }
 });
-// ✅ Add this test route
-app.get('/api/test', (req, res) => {
-  res.send('Backend is working ✅');
-});
 
-// Start server
+// ✅ Start Server
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));

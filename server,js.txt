@@ -9,7 +9,7 @@ const PORT = process.env.PORT || 10000;
 const SECRET = 'secret_key'; // 🔐 Use env in production
 
 // MongoDB connection
-mongoose.connect('mongodb+srv://aandal:aandal2005@emailheadercluster.e2ir8k8.mongodb.net/?retryWrites=true&w=majority&appName=EmailHeaderCluster', {
+mongoose.connect('mongodb+srv://aandal:<aandal@2005>@emailheadercluster.e2ir8k8.mongodb.net/emailAnalyzer?retryWrites=true&w=majority&appName=EmailHeaderCluster', {
   useNewUrlParser: true,
   useUnifiedTopology: true
 }).then(() => {

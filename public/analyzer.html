@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Email Header Analyzer</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f2f6fa;
+      padding: 20px;
+    }
+
+    h2 {
+      color: #333;
+    }
+
+    input, textarea {
+      width: 100%;
+      padding: 10px;
+      margin-top: 8px;
+      margin-bottom: 15px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+    }
+
+    button {
+      padding: 10px 20px;
+      margin: 5px;
+      border: none;
+      background-color: #4285f4;
+      color: white;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background-color: #2a64c5;
+    }
+
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin-top: 15px;
+    }
+
+    th, td {
+      border: 1px solid #aaa;
+      padding: 8px;
+      text-align: left;
+    }
+
+    th {
+      background-color: #ddd;
+    }
+
+    #result, #history {
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+<script>
+  if (!localStorage.getItem('token')) {
+    window.location.href = 'login.html';
+  }
+</script>
+
+
+  <h2>Email Header Analyzer</h2>
+  <textarea id="headerInput" placeholder="Paste your email header here..."></textarea><br>
+  <button id="analyzeBtn">Analyze</button>
+  <button id="viewBtn">📜 View History</button>
+  <button id="refreshBtn">🔄 Refresh History</button>
+  <button id="clearBtn">🧹 Clear History</button>
+
+  <h3>Result:</h3>
+  <div id="result"></div>
+
+  <div id="history" style="display: none;"></div>
+
+  <script>
+    // Redirect to login if not authenticated
+    const token = localStorage.getItem("token");
+    if (!token) {
+      alert("⚠️ Please login first.");
+      window.location.href = "login.html";
+    }
+  </script>
+
+  <script src="script.js"></script>
+</body>
+</html>
+

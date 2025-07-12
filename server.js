@@ -1,147 +1,172 @@
+// 📁 server.js
 const express = require('express');
-const cors = require('cors');
 const mongoose = require('mongoose');
-const dotenv = require('dotenv');
-const fetch = require('node-fetch');
+const cors = require('cors');
+const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const bcrypt = require('bcrypt');
-const EmailHeader = require('./models/EmailHeader');
-const User = require('./models/User');
-
-dotenv.config();
+const fetch = require('node-fetch');
 
 const app = express();
+const PORT = process.env.PORT || 10000;
+const JWT_SECRET = 'your-secret-key'; // Replace with environment variable in production
 
-// CORS for frontend
-app.use(cors({
-  origin: 'https://email-header-frontend.onrender.com'
-}));
+// MongoDB Connection
+mongoose.connect('mongodb+srv://aandal:aandal2005@emailheadercluster.e2ir8k8.mongodb.net/emailAnalyzer?retryWrites=true&w=majority&appName=EmailHeaderCluster', {
+  useNewUrlParser: true,
+  useUnifiedTopology: true
+}).then(() => console.log('✅ MongoDB connected'))
+  .catch((err) => console.error('❌ MongoDB connection error:', err));
 
+// Middleware
+app.use(cors({ origin: 'https://email-header-frontend.onrender.com' }));
 app.use(express.json());
 
-// Connect MongoDB
-mongoose.connect(process.env.MONGO_URI)
-  .then(() => console.log('✅ MongoDB Connected'))
-  .catch(err => console.error('❌ MongoDB connection error:', err));
-
-// Extract sender IP
-function extractSenderIP(header) {
-  const match = header.match(/\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b/);
-  return match ? match[0] : 'Unknown';
-}
-
-// Rate safe meter
-function getSafeMeter(spf, dkim, dmarc) {
-  const passed = [spf, dkim, dmarc].filter(r => r === 'pass').length;
-  if (passed === 3) return 'Safe';
-  if (passed === 2) return 'Moderate';
-  return 'Unsafe';
-}
-
-// ✅ Test API
-app.get('/api/test', (req, res) => {
-  res.send('Backend is working ✅');
+// Schemas
+const userSchema = new mongoose.Schema({
+  name: String,
+  email: { type: String, unique: true },
+  password: String,
 });
+const User = mongoose.model('User', userSchema);
 
-// ✅ REGISTER API
-app.post('/api/register', async (req, res) => {
-  const { username, password } = req.body;
+const headerSchema = new mongoose.Schema({
+  from: String,
+  to: String,
+  subject: String,
+  date: String,
+  spf: String,
+  dkim: String,
+  dmarc: String,
+  safeMeter: String,
+  senderIP: String,
+  ipLocation: String,
+  createdAt: { type: Date, default: Date.now },
+  userId: mongoose.Schema.Types.ObjectId
+});
+const Header = mongoose.model('Header', headerSchema);
+
+// Auth Middleware
+function authMiddleware(req, res, next) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader) return res.status(401).json({ error: 'No token provided' });
+
+  const token = authHeader.split(' ')[1];
   try {
-    const existing = await User.findOne({ username });
-    if (existing) return res.status(400).json({ error: "Username already exists" });
-
-    const hashed = await bcrypt.hash(password, 10);
-    const newUser = new User({ username, password: hashed, role: 'user' });
-    await newUser.save();
-
-    res.status(201).json({ message: "User registered successfully" });
+    const decoded = jwt.verify(token, JWT_SECRET);
+    req.user = decoded;
+    next();
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Server error during registration" });
+    res.status(401).json({ error: 'Invalid token' });
   }
+}
+
+// Auth Routes
+app.post('/register', async (req, res) => {
+  const { name, email, password } = req.body;
+  if (!name || !email || !password)
+    return res.status(400).json({ error: 'All fields are required' });
+
+  const existingUser = await User.findOne({ email });
+  if (existingUser) return res.status(400).json({ error: 'Email already registered' });
+
+  const hashedPassword = await bcrypt.hash(password, 10);
+  const newUser = new User({ name, email, password: hashedPassword });
+  await newUser.save();
+
+  res.json({ message: 'Registered successfully' });
 });
 
-// ✅ LOGIN API
-app.post('/api/login', async (req, res) => {
-  const { username, password } = req.body;
+app.post('/login', async (req, res) => {
+  const { email, password } = req.body;
+  const user = await User.findOne({ email });
+  if (!user) return res.status(400).json({ error: 'Invalid email or password' });
 
-  try {
-    const user = await User.findOne({ username });
-    if (!user) return res.status(401).json({ error: 'User not found' });
+  const isMatch = await bcrypt.compare(password, user.password);
+  if (!isMatch) return res.status(400).json({ error: 'Invalid email or password' });
 
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) return res.status(401).json({ error: 'Incorrect password' });
-
-    const token = jwt.sign({ username: user.username, role: user.role }, 'secretkey', { expiresIn: '1h' });
-    res.json({ token, role: user.role });
-  } catch (error) {
-    console.error('❌ Login Error:', error);
-    res.status(500).json({ error: 'Login failed' });
-  }
+  const token = jwt.sign({ userId: user._id }, JWT_SECRET, { expiresIn: '1h' });
+  res.json({ message: 'Login successful', token });
 });
 
-// ✅ ANALYZE HEADER API
-app.post('/api/analyze', async (req, res) => {
+// Analyze Route
+function extractSenderIP(header) {
+  const match = header.match(/Received: from .*\[(\d+\.\d+\.\d+\.\d+)\]/);
+  return match ? match[1] : null;
+}
+
+app.post('/analyze', authMiddleware, async (req, res) => {
   const header = req.body.header;
-  if (!header) return res.status(400).json({ error: 'Header is required' });
+  if (!header) return res.status(400).json({ error: 'No header provided' });
 
-  try {
-    const from = (header.match(/From: (.*)/) || [])[1] || 'Unknown';
-    const to = (header.match(/To: (.*)/) || [])[1] || 'Unknown';
-    const subject = (header.match(/Subject: (.*)/) || [])[1] || 'Unknown';
-    const date = (header.match(/Date: (.*)/) || [])[1] || 'Unknown';
-    const spf = /spf=pass/.test(header) ? 'pass' : 'fail';
-    const dkim = /dkim=pass/.test(header) ? 'pass' : 'fail';
-    const dmarc = /dmarc=pass/.test(header) ? 'pass' : 'fail';
+  const importantKeys = ['From', 'To', 'Delivered-To', 'Return-Path', 'Received-SPF', 'Subject', 'Date'];
+  const lines = header.split('\n');
+  const result = {};
 
-    const senderIP = extractSenderIP(header);
-    let ipLocation = 'Unknown';
-
-    try {
-      const ipRes = await fetch(`http://ip-api.com/json/${senderIP}`);
-      const ipData = await ipRes.json();
-      ipLocation = ipData?.country || 'Unknown';
-    } catch (e) {
-      console.warn('⚠️ IP location fetch failed');
+  lines.forEach(line => {
+    const [key, ...rest] = line.split(':');
+    const trimmedKey = key.trim();
+    if (importantKeys.includes(trimmedKey) && rest.length > 0) {
+      result[trimmedKey] = rest.join(':').trim();
     }
+  });
 
-    const safeMeter = getSafeMeter(spf, dkim, dmarc);
+  const spfMatch = header.match(/spf=(\w+)/i);
+  const dkimMatch = header.match(/dkim=(\w+)/i);
+  const dmarcMatch = header.match(/dmarc=(\w+)/i);
+  result['SPF Status'] = spfMatch ? spfMatch[1] : 'not found';
+  result['DKIM Status'] = dkimMatch ? dkimMatch[1] : 'not found';
+  result['DMARC Status'] = dmarcMatch ? dmarcMatch[1] : 'not found';
 
-    const newHeader = new EmailHeader({
-      from, to, subject, date, spf, dkim, dmarc, safeMeter, senderIP, ipLocation
-    });
-
-    await newHeader.save();
-
-    res.json({ from, to, subject, date, spf, dkim, dmarc, safeMeter, senderIP, ipLocation });
-  } catch (error) {
-    console.error('❌ Analyze Error:', error);
-    res.status(500).json({ error: 'Server error during analysis' });
+  if (result['SPF Status'] === 'pass' && result['DKIM Status'] === 'pass' && result['DMARC Status'] === 'pass') {
+    result['Safe Meter'] = '✅ Safe – All checks passed';
+  } else if ([result['SPF Status'], result['DKIM Status'], result['DMARC Status']].filter(x => x === 'pass').length >= 2) {
+    result['Safe Meter'] = '⚠️ Risk – Partial checks passed';
+  } else {
+    result['Safe Meter'] = '❌ Unsafe – Failed checks';
   }
+
+  const senderIP = extractSenderIP(header);
+  if (senderIP) {
+    try {
+      const geoRes = await fetch(`http://ip-api.com/json/${senderIP}`);
+      const geoData = await geoRes.json();
+      result['Sender IP'] = senderIP;
+      result['IP Location'] = `${geoData.city}, ${geoData.regionName}, ${geoData.country}`;
+    } catch (err) {
+      result['Sender IP'] = senderIP;
+      result['IP Location'] = '❌ Location lookup failed';
+    }
+  } else {
+    result['Sender IP'] = 'Not found';
+    result['IP Location'] = 'N/A';
+  }
+
+  await Header.create({
+    from: result['From'],
+    to: result['To'],
+    subject: result['Subject'],
+    date: result['Date'],
+    spf: result['SPF Status'],
+    dkim: result['DKIM Status'],
+    dmarc: result['DMARC Status'],
+    safeMeter: result['Safe Meter'],
+    senderIP: result['Sender IP'],
+    ipLocation: result['IP Location'],
+    userId: req.user.userId
+  });
+
+  res.json(result);
 });
 
-// ✅ GET HISTORY
-app.get('/api/history', async (req, res) => {
+// History Route
+app.get('/history', authMiddleware, async (req, res) => {
   try {
-    const history = await EmailHeader.find().sort({ createdAt: -1 });
+    const history = await Header.find({ userId: req.user.userId }).sort({ createdAt: -1 }).limit(50);
     res.json(history);
-  } catch (error) {
-    console.error('❌ History Fetch Error:', error);
+  } catch (err) {
     res.status(500).json({ error: 'Failed to fetch history' });
   }
 });
 
-// ✅ CLEAR HISTORY
-app.delete('/api/history', async (req, res) => {
-  try {
-    await EmailHeader.deleteMany({});
-    res.json({ message: 'All history cleared.' });
-  } catch (error) {
-    console.error('❌ Clear Error:', error);
-    res.status(500).json({ error: 'Failed to clear history.' });
-  }
-});
-
-// ✅ Start Server
-const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+// Start server
+app.listen(PORT, () => console.log(`✅ Server running at http://localhost:${PORT}`));

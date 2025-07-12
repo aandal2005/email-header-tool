@@ -2,92 +2,80 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Email Header Analyzer</title>
+  <title>Email Header Auth</title>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      background: #f2f6fa;
-      padding: 20px;
-    }
-
-    h2 {
-      color: #333;
-    }
-
-    input, textarea {
-      width: 100%;
-      padding: 10px;
-      margin-top: 8px;
-      margin-bottom: 15px;
-      border: 1px solid #ccc;
-      border-radius: 5px;
-    }
-
-    button {
-      padding: 10px 20px;
-      margin: 5px;
-      border: none;
-      background-color: #4285f4;
-      color: white;
-      border-radius: 5px;
-      cursor: pointer;
-    }
-
-    button:hover {
-      background-color: #2a64c5;
-    }
-
-    table {
-      border-collapse: collapse;
-      width: 100%;
-      margin-top: 15px;
-    }
-
-    th, td {
-      border: 1px solid #aaa;
-      padding: 8px;
-      text-align: left;
-    }
-
-    th {
-      background-color: #ddd;
-    }
-
-    #result, #history {
-      margin-top: 20px;
-    }
+    * { box-sizing: border-box; }
+    body { font-family: Arial; background: #f4f4f4; display: flex; justify-content: center; align-items: center; height: 100vh; }
+    .container { background: #fff; padding: 25px; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.2); width: 100%; max-width: 400px; }
+    h2 { text-align: center; margin-bottom: 15px; }
+    input, button { width: 100%; padding: 10px; margin-top: 10px; }
+    .toggle { text-align: center; margin-top: 10px; cursor: pointer; color: #007bff; }
+    .error { color: red; text-align: center; margin-top: 10px; }
+    .success { color: green; text-align: center; margin-top: 10px; }
   </style>
 </head>
 <body>
-<script>
-  if (!localStorage.getItem('token')) {
-    window.location.href = 'login.html';
-  }
-</script>
-
-
-  <h2>Email Header Analyzer</h2>
-  <textarea id="headerInput" placeholder="Paste your email header here..."></textarea><br>
-  <button id="analyzeBtn">Analyze</button>
-  <button id="viewBtn">📜 View History</button>
-  <button id="refreshBtn">🔄 Refresh History</button>
-  <button id="clearBtn">🧹 Clear History</button>
-
-  <h3>Result:</h3>
-  <div id="result"></div>
-
-  <div id="history" style="display: none;"></div>
+  <div class="container">
+    <h2 id="formTitle">Login</h2>
+    <input type="text" id="name" placeholder="Name" style="display:none;">
+    <input type="email" id="email" placeholder="Email">
+    <input type="password" id="password" placeholder="Password">
+    <button id="submitBtn">Login</button>
+    <p class="toggle" onclick="toggleForm()">Don't have an account? Sign Up</p>
+    <p id="message" class="error"></p>
+  </div>
 
   <script>
-    // Redirect to login if not authenticated
-    const token = localStorage.getItem("token");
-    if (!token) {
-      alert("⚠️ Please login first.");
-      window.location.href = "login.html";
-    }
-  </script>
+    const BACKEND_URL = 'https://email-header-backend.onrender.com';
+    let isSignup = false;
 
-  <script src="script.js"></script>
+    const nameInput = document.getElementById('name');
+    const emailInput = document.getElementById('email');
+    const passwordInput = document.getElementById('password');
+    const formTitle = document.getElementById('formTitle');
+    const submitBtn = document.getElementById('submitBtn');
+    const message = document.getElementById('message');
+
+    function toggleForm() {
+      isSignup = !isSignup;
+      nameInput.style.display = isSignup ? 'block' : 'none';
+      formTitle.textContent = isSignup ? 'Sign Up' : 'Login';
+      submitBtn.textContent = isSignup ? 'Sign Up' : 'Login';
+      document.querySelector('.toggle').textContent = isSignup ? 'Already have an account? Login' : "Don't have an account? Sign Up";
+      message.textContent = '';
+    }
+
+    submitBtn.addEventListener('click', async () => {
+      const email = emailInput.value.trim();
+      const password = passwordInput.value.trim();
+      const name = nameInput.value.trim();
+      if (!email || !password || (isSignup && !name)) {
+        message.textContent = '❌ All fields are required';
+        return;
+      }
+
+      const endpoint = isSignup ? '/register' : '/login';
+      try {
+        const res = await fetch(`${BACKEND_URL}${endpoint}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, email, password })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          message.textContent = `❌ ${data.error || 'Something went wrong'}`;
+        } else {
+          message.className = 'success';
+          message.textContent = data.message;
+          if (!isSignup && data.token) {
+            localStorage.setItem('token', data.token);
+            setTimeout(() => window.location.href = 'analyzer.html', 1200);
+          }
+        }
+      } catch (err) {
+        message.textContent = '❌ Network error';
+      }
+    });
+  </script>
 </body>
 </html>
-

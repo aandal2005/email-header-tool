@@ -43,8 +43,6 @@ const headerSchema = new mongoose.Schema({
 const Header = mongoose.model('Header', headerSchema);
 
 // 🔐 Register
-const bcrypt = require('bcryptjs');
-const User = require('./models/User');
 
 app.post('/register', async (req, res) => {
   const { name, email, password } = req.body;

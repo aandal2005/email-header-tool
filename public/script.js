@@ -5,7 +5,7 @@ function login() {
   const username = document.getElementById('username').value;
   const password = document.getElementById('password').value;
 
-  fetch(`${BACKEND_URL}/api/login`, {
+  fetch(`${BACKEND_URL}/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ username, password })
@@ -39,7 +39,7 @@ function analyzeHeader() {
     return;
   }
 
-  fetch(`${BACKEND_URL}/api/analyze`, {
+  fetch(`${BACKEND_URL}/analyze`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ header })
@@ -71,7 +71,7 @@ function analyzeHeader() {
 
 // ✅ FETCH HISTORY
 function fetchHistory() {
-  fetch(`${BACKEND_URL}/api/history`)
+  fetch(`${BACKEND_URL}/history`)
     .then(res => res.json())
     .then(history => {
       const historyDiv = document.getElementById('history');
@@ -121,7 +121,7 @@ function fetchHistory() {
 
 // ✅ CLEAR HISTORY
 function clearHistory() {
-  fetch(`${BACKEND_URL}/api/history`, {
+  fetch(`${BACKEND_URL}/history`, {
     method: 'DELETE'
   })
     .then(res => res.json())

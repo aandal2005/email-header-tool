@@ -3,10 +3,11 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
 const fetch = require('node-fetch');
+const bcrypt = require('bcryptjs');
 const app = express();
 
 const PORT = process.env.PORT || 10000;
-const SECRET = 'secret_key'; // 🔐 Use env in production
+const SECRET = 'secret_key'; // 🔐 Use environment variable in production
 
 // MongoDB connection
 mongoose.connect('mongodb+srv://aandal:aandal2005@emailheadercluster.e2ir8k8.mongodb.net/?retryWrites=true&w=majority&appName=EmailHeaderCluster', {
@@ -40,9 +41,10 @@ const headerSchema = new mongoose.Schema({
 });
 const Header = mongoose.model('Header', headerSchema);
 
-// 🔐 Register
-const bcrypt = require('bcryptjs');
+// Import user model
 const User = require('./models/User');
+
+// 🔐 Register
 app.post('/register', async (req, res) => {
   const { name, email, password } = req.body;
 
@@ -83,7 +85,7 @@ app.post('/login', async (req, res) => {
     if (!match) return res.status(400).json({ error: 'Invalid password' });
 
     const token = jwt.sign({ id: user._id }, SECRET, { expiresIn: '2h' });
-    res.json({ message: '✅ Login successful', token });
+    res.json({ message: '✅ Login successful', token, role: user.role || 'user' });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: '❌ Server error' });
@@ -96,7 +98,7 @@ function extractSenderIP(header) {
   return match ? match[1] : null;
 }
 
-// Analyze email header
+// 📌 Analyze email header
 app.post('/analyze', async (req, res) => {
   const header = req.body.header;
   if (!header) return res.status(400).json({ error: 'No header provided' });
@@ -105,6 +107,7 @@ app.post('/analyze', async (req, res) => {
   const lines = header.split('\n');
   const result = {};
 
+  // Extract basic fields
   lines.forEach(line => {
     const [key, ...rest] = line.split(':');
     const trimmedKey = key.trim();
@@ -147,6 +150,7 @@ app.post('/analyze', async (req, res) => {
     result['IP Location'] = 'N/A';
   }
 
+  // Save to DB
   await Header.create({
     from: result['From'],
     to: result['To'],
@@ -160,17 +164,54 @@ app.post('/analyze', async (req, res) => {
     ipLocation: result['IP Location']
   });
 
-  res.json(result);
+  // ✅ Send clean JSON response for frontend
+  res.json({
+    from: result['From'] || "Not found",
+    to: result['To'] || "Not found",
+    subject: result['Subject'] || "Not found",
+    date: result['Date'] || "Not found",
+    spf: result['SPF Status'] || "not found",
+    dkim: result['DKIM Status'] || "not found",
+    dmarc: result['DMARC Status'] || "not found",
+    safeMeter: result['Safe Meter'] || "❌ Unsafe",
+    senderIP: result['Sender IP'] || "Not found",
+    ipLocation: result['IP Location'] || "N/A"
+  });
 });
 
-// Get history
+// 📌 Get history (clean format)
 app.get('/history', async (req, res) => {
   try {
     const history = await Header.find().sort({ createdAt: -1 }).limit(50);
-    res.json(history);
+
+    const cleanHistory = history.map(item => ({
+      from: item.from,
+      to: item.to,
+      subject: item.subject,
+      date: item.date,
+      spf: item.spf,
+      dkim: item.dkim,
+      dmarc: item.dmarc,
+      safeMeter: item.safeMeter,
+      senderIP: item.senderIP,
+      ipLocation: item.ipLocation
+    }));
+
+    res.json(cleanHistory);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: '❌ Failed to fetch history' });
+  }
+});
+
+// 📌 Clear history
+app.delete('/history', async (req, res) => {
+  try {
+    await Header.deleteMany({});
+    res.json({ message: 'History cleared successfully' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: '❌ Failed to clear history' });
   }
 });
 

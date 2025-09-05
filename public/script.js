@@ -2,14 +2,13 @@ const BACKEND_URL = 'https://email-header-backend.onrender.com';
 
 // ✅ LOGIN
 function login() {
-  const username = document.getElementById('username').value;
+  const email = document.getElementById('username').value; // fixed (use email)
   const password = document.getElementById('password').value;
 
-  // ⚠️ backend expects { email, password }, not { username, password }
   fetch(`${BACKEND_URL}/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: username, password })  
+    body: JSON.stringify({ email, password }) // backend expects email
   })
     .then(res => res.json())
     .then(data => {
@@ -24,7 +23,7 @@ function login() {
     })
     .catch(err => {
       console.error('❌ Login error:', err);
-      document.getElementById('loginStatus').innerHTML = '❌ Login failed';
+      document.getElementById('loginStatus').innerHTML = '❌ Error during login';
     });
 }
 
@@ -66,7 +65,7 @@ function analyzeHeader() {
           <tr><th>Location</th><td>${data.ipLocation}</td></tr>
         </table>
       `;
-      fetchHistory();
+      fetchHistory(); // refresh history after analyze
     })
     .catch(error => {
       console.error('❌ Analyze error:', error);
@@ -80,7 +79,7 @@ function fetchHistory() {
     .then(res => res.json())
     .then(history => {
       const historyDiv = document.getElementById('history');
-      historyDiv.style.display = 'block';
+      historyDiv.style.display = 'block'; // always show history
       historyDiv.innerHTML = '';
 
       if (!history || history.length === 0) {
@@ -88,35 +87,34 @@ function fetchHistory() {
         return;
       }
 
-      const table = document.createElement('table');
-      table.style.borderCollapse = 'collapse';
-      table.style.width = '100%';
-
-      const headerRow = document.createElement('tr');
-      ['From', 'To', 'Subject', 'Date', 'SPF', 'DKIM', 'DMARC', 'Safe Meter', 'IP', 'Location'].forEach(text => {
-        const th = document.createElement('th');
-        th.textContent = text;
-        th.style.border = '1px solid black';
-        th.style.backgroundColor = '#ddd';
-        th.style.padding = '8px';
-        th.style.textAlign = 'left';
-        headerRow.appendChild(th);
-      });
-      table.appendChild(headerRow);
+      let table = `
+        <table border="1" style="border-collapse: collapse; width: 100%; margin-top:10px;">
+          <tr>
+            <th>From</th><th>To</th><th>Subject</th><th>Date</th>
+            <th>SPF</th><th>DKIM</th><th>DMARC</th>
+            <th>Safe Meter</th><th>IP</th><th>Location</th>
+          </tr>
+      `;
 
       history.forEach(item => {
-        const row = document.createElement('tr');
-        [item.from, item.to, item.subject, item.date, item.spf, item.dkim, item.dmarc, item.safeMeter, item.senderIP, item.ipLocation].forEach(text => {
-          const cell = document.createElement('td');
-          cell.textContent = text || '—';
-          cell.style.border = '1px solid #ccc';
-          cell.style.padding = '6px';
-          row.appendChild(cell);
-        });
-        table.appendChild(row);
+        table += `
+          <tr>
+            <td>${item.from || '—'}</td>
+            <td>${item.to || '—'}</td>
+            <td>${item.subject || '—'}</td>
+            <td>${item.date || '—'}</td>
+            <td>${item.spf || '—'}</td>
+            <td>${item.dkim || '—'}</td>
+            <td>${item.dmarc || '—'}</td>
+            <td>${item.safeMeter || '—'}</td>
+            <td>${item.senderIP || '—'}</td>
+            <td>${item.ipLocation || '—'}</td>
+          </tr>
+        `;
       });
 
-      historyDiv.appendChild(table);
+      table += `</table>`;
+      historyDiv.innerHTML = table;
     })
     .catch(error => {
       console.error('❌ Fetch history error:', error);
@@ -126,9 +124,7 @@ function fetchHistory() {
 
 // ✅ CLEAR HISTORY
 function clearHistory() {
-  fetch(`${BACKEND_URL}/history`, {
-    method: 'DELETE'
-  })
+  fetch(`${BACKEND_URL}/history`, { method: 'DELETE' })
     .then(res => res.json())
     .then(data => {
       alert('✅ ' + data.message);
@@ -140,13 +136,13 @@ function clearHistory() {
     });
 }
 
-// ✅ VIEW HISTORY
+// ✅ VIEW HISTORY (fixed)
 function viewHistory() {
   const historyDiv = document.getElementById('history');
-  if (historyDiv.style.display === 'none' || historyDiv.innerHTML === '') {
-    fetchHistory();
+  if (historyDiv.style.display === 'none') {
+    fetchHistory(); // always load when showing
   } else {
-    historyDiv.style.display = 'block';
+    historyDiv.style.display = 'none'; // toggle hide
   }
 }
 
@@ -161,5 +157,5 @@ document.getElementById('viewBtn').addEventListener('click', viewHistory);
 document.getElementById('refreshBtn').addEventListener('click', refreshHistory);
 document.getElementById('clearBtn').addEventListener('click', clearHistory);
 
-// Auto load history
+// Auto load history when page loads
 window.onload = fetchHistory;

@@ -2,22 +2,25 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Analysis History</title>
+  <title>📜 Email Header History</title>
   <style>
     body { font-family: Arial, sans-serif; background: #f4f4f4; padding: 20px; }
-    h2 { color: #333; }
-    table { border-collapse: collapse; width: 100%; margin-top: 20px; background: #fff; }
-    th, td { border: 1px solid #ccc; padding: 10px; text-align: left; }
+    h2 { text-align: center; }
+    #history { margin-top: 20px; }
+    table { border-collapse: collapse; width: 100%; background: white; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
     th { background: #eee; }
-    button { margin: 10px 5px; padding: 10px 15px; cursor: pointer; }
+    button { margin-top: 15px; padding: 8px 15px; cursor: pointer; }
   </style>
 </head>
 <body>
-  <div class="container">
-  <h2>📜 Analysis History</h2>
+  <h2>📜 Email Header Analysis History</h2>
+
+  <!-- ✅ History container -->
   <div id="history">Loading history...</div>
 
-  <button onclick="clearHistory()">🗑 Clear History</button>
+  <!-- ✅ Clear history button -->
+  <button onclick="clearHistory()">🗑️ Clear History</button>
   <button onclick="window.location.href='../analyzer.html'">⬅ Back to Analyzer</button>
 
   <script>
@@ -48,22 +51,101 @@
 
           history.forEach(item => {
             const row = document.createElement('tr');
-            [
-              item.from,
-              item.to,
-              item.subject,
-              item.date,
-              item.spf,
-              item.dkim,
-              item.dmarc,
-              item.safeMeter,
-              item.senderIP,     // ✅ fixed key
-              item.ipLocation    // ✅ fixed key
-            ].forEach(text => {
-              const td = document.createElement('td');
-              td.textContent = text || '—';
-              row.appendChild(td);
+            [item.from, item.to, item.subject, item.date, item.spf, item.dkim, item.dmarc, item.safeMeter, item.senderIP, item.ipLocation]
+              .forEach(text => {
+                const td = document.createElement('td');
+                td.textContent = text || '—';
+                row.appendChild(td);
+              });
+            table.appendChild(row);
+          });
+
+          historyDiv.appendChild(table);
+        })
+        .catch(err => {
+          console.error('❌ Error fetching history:', err);
+          document.getElementById('history').innerHTML = '<p style="color:red;">❌ Failed to load history.</p>';
+        });
+    }
+
+    // ✅ Clear History
+    function clearHistory() {
+      fetch(`${BACKEND_URL}/history`, { method: 'DELETE' })
+        .then(res => res.json())
+        .then(data => {
+          alert('✅ ' + data.message);
+          fetchHistory();
+        })
+        .catch(err => {
+          console.error('❌ Error clearing history:', err);
+          alert('❌ Failed to clear history');
+        });
+    }
+
+    // Auto load history
+    window.onload = fetchHistory;
+  </script>
+</body>
+</html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>📜 Email Header History</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #f4f4f4; padding: 20px; }
+    h2 { text-align: center; }
+    #history { margin-top: 20px; }
+    table { border-collapse: collapse; width: 100%; background: white; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+    th { background: #eee; }
+    button { margin-top: 15px; padding: 8px 15px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <h2>📜 Email Header Analysis History</h2>
+
+  <!-- ✅ History container -->
+  <div id="history">Loading history...</div>
+
+  <!-- ✅ Clear history button -->
+  <button onclick="clearHistory()">🗑️ Clear History</button>
+  <button onclick="window.location.href='../analyzer.html'">⬅ Back to Analyzer</button>
+
+  <script>
+    const BACKEND_URL = 'https://email-header-backend.onrender.com';
+
+    // ✅ Fetch History
+    function fetchHistory() {
+      fetch(`${BACKEND_URL}/history`)
+        .then(res => res.json())
+        .then(history => {
+          const historyDiv = document.getElementById('history');
+          historyDiv.innerHTML = '';
+
+          if (!history || history.length === 0) {
+            historyDiv.innerHTML = '<p>No history found.</p>';
+            return;
+          }
+
+          const table = document.createElement('table');
+          const headerRow = document.createElement('tr');
+          ['From', 'To', 'Subject', 'Date', 'SPF', 'DKIM', 'DMARC', 'Safe Meter', 'IP', 'Location']
+            .forEach(text => {
+              const th = document.createElement('th');
+              th.textContent = text;
+              headerRow.appendChild(th);
             });
+          table.appendChild(headerRow);
+
+          history.forEach(item => {
+            const row = document.createElement('tr');
+            [item.from, item.to, item.subject, item.date, item.spf, item.dkim, item.dmarc, item.safeMeter, item.senderIP, item.ipLocation]
+              .forEach(text => {
+                const td = document.createElement('td');
+                td.textContent = text || '—';
+                row.appendChild(td);
+              });
             table.appendChild(row);
           });
 

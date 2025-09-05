@@ -2,13 +2,14 @@ const BACKEND_URL = 'https://email-header-backend.onrender.com';
 
 // ✅ LOGIN
 function login() {
-  const email = document.getElementById('username').value; // frontend input id is "username"
+  const username = document.getElementById('username').value;
   const password = document.getElementById('password').value;
 
+  // ⚠️ backend expects { email, password }, not { username, password }
   fetch(`${BACKEND_URL}/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password }) // backend expects "email", not "username"
+    body: JSON.stringify({ email: username, password })  
   })
     .then(res => res.json())
     .then(data => {
@@ -23,7 +24,7 @@ function login() {
     })
     .catch(err => {
       console.error('❌ Login error:', err);
-      document.getElementById('loginStatus').innerHTML = '❌ Server error';
+      document.getElementById('loginStatus').innerHTML = '❌ Login failed';
     });
 }
 
@@ -39,8 +40,7 @@ function showDashboard(role) {
 function analyzeHeader() {
   const header = document.getElementById('headerInput').value;
   if (!header.trim()) {
-    document.getElementById('result').innerHTML =
-      '<p style="color:red;">❌ Please paste an email header.</p>';
+    document.getElementById('result').innerHTML = '<p style="color:red;">❌ Please paste an email header.</p>';
     return;
   }
 
@@ -70,8 +70,7 @@ function analyzeHeader() {
     })
     .catch(error => {
       console.error('❌ Analyze error:', error);
-      document.getElementById('result').innerHTML =
-        '<p style="color:red;">❌ Failed to analyze header.</p>';
+      document.getElementById('result').innerHTML = '<p style="color:red;">❌ Failed to analyze header.</p>';
     });
 }
 
@@ -121,8 +120,7 @@ function fetchHistory() {
     })
     .catch(error => {
       console.error('❌ Fetch history error:', error);
-      document.getElementById('history').innerHTML =
-        '<p style="color:red;">❌ Error fetching history.</p>';
+      document.getElementById('history').innerHTML = '<p style="color:red;">❌ Error fetching history.</p>';
     });
 }
 

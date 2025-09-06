@@ -63,4 +63,3 @@ function clearHistory() {
 
 // Auto load history
 window.onload = fetchHistory;
-<script src="history.js"></script>

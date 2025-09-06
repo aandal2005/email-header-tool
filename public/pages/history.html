@@ -3,27 +3,100 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Email Header Analyzer - History</title>
+  <title>Analysis History</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
-    body { font-family: Arial, sans-serif; padding: 20px; }
-    h1 { color: #333; }
-    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-    th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
-    th { background-color: #f4f4f4; }
-    button { margin: 10px 5px; padding: 8px 16px; cursor: pointer; }
+    body {
+      font-family: Arial, sans-serif;
+      background: linear-gradient(135deg, #2563eb, #22c55e);
+      margin: 0;
+      padding: 0;
+      color: #333;
+    }
+    header {
+      background: #1e293b;
+      color: white;
+      padding: 15px;
+      text-align: center;
+      font-size: 22px;
+    }
+    main {
+      max-width: 900px;
+      margin: 30px auto;
+      background: white;
+      padding: 25px;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    h1 {
+      text-align: center;
+      color: #2563eb;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+    }
+    th, td {
+      padding: 12px;
+      text-align: center;
+      border-bottom: 1px solid #ddd;
+    }
+    th {
+      background: #f3f4f6;
+      color: #111827;
+    }
+    .badge {
+      padding: 5px 10px;
+      border-radius: 6px;
+      color: white;
+      font-size: 12px;
+    }
+    .success { background: #22c55e; }
+    .warning { background: #f59e0b; }
+    .danger { background: #ef4444; }
+    .btn {
+      margin: 15px 5px;
+      padding: 10px 18px;
+      border: none;
+      border-radius: 8px;
+      background: #2563eb;
+      color: white;
+      cursor: pointer;
+    }
+    .btn:hover { background: #1d4ed8; }
+    footer {
+      text-align: center;
+      padding: 15px;
+      background: #1e293b;
+      color: white;
+    }
   </style>
 </head>
 <body>
-  <h1>📜 Analysis History</h1>
+  <header>📑 Email Header History</header>
+  <main>
+    <h1>Analysis History</h1>
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Email ID</th>
+          <th>Date</th>
+          <th>Safe Meter</th>
+        </tr>
+      </thead>
+      <tbody id="historyTable">
+        <tr><td colspan="4">Loading history...</td></tr>
+      </tbody>
+    </table>
+    <div style="text-align:center;">
+      <button class="btn" onclick="clearHistory()">🗑 Clear History</button>
+      <button class="btn" onclick="window.location.href='../analyzer.html'">⬅ Back to Analyzer</button>
+    </div>
+  </main>
+  <footer>© 2025 Email Header Tool</footer>
 
-  <!-- ✅ This is the container your JS expects -->
-  <div id="history">Loading history...</div>
-
-  <br>
-  <button onclick="clearHistory()">🗑 Clear History</button>
-  <button onclick="window.location.href='../analyzer.html'">⬅ Back to Analyzer</button>
-
-  <!-- ✅ Load the script -->
-  <script src="history.js"></script>
+  <script src="../js/history.js"></script>
 </body>
 </html>

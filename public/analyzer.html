@@ -31,21 +31,17 @@
       box-shadow: 0 4px 12px rgba(0,0,0,0.1);
     }
 
-    h1 {
-      color: #2563eb;
-      text-align: center;
-    }
+    h1 { color: #2563eb; text-align: center; }
 
-    textarea, input {
+    textarea {
       width: 100%;
+      height: 150px;
       padding: 12px;
       border: 2px solid #ddd;
       border-radius: 8px;
       font-size: 14px;
       margin-top: 15px;
     }
-
-    textarea { height: 150px; }
 
     button {
       margin-top: 20px;
@@ -85,10 +81,9 @@
 
   <main>
     <h1>Analyze Your Email Header</h1>
-    <p>Paste your raw email header below and click <b>Analyze</b> to detect SPF, DKIM, DMARC, and more.</p>
+    <p>Paste your raw email header below and click <b>Analyze</b> to detect SPF, DKIM, DMARC, and IP location.</p>
     
     <textarea id="emailHeader" placeholder="Paste email header here..."></textarea>
-    <input id="ipInput" placeholder="Enter IP address to check location (e.g., 8.8.8.8)" />
     <button onclick="analyzeHeader()">🔍 Analyze</button>
     <button onclick="window.location.href='pages/history.html'">📜 View History</button>
 
@@ -100,12 +95,21 @@
   </footer>
 
   <script>
+    // Function to extract first IPv4 from header
+    function extractIP(header) {
+      const regex = /(\d{1,3}\.){3}\d{1,3}/;
+      const match = header.match(regex);
+      return match ? match[0] : null;
+    }
+
     async function analyzeHeader() {
       const resultDiv = document.getElementById("result");
       resultDiv.style.display = "block";
 
-      const ip = document.getElementById("ipInput").value.trim();
-      let locationHTML = "<p><b>IP Location:</b> Not provided</p>";
+      const headerText = document.getElementById("emailHeader").value.trim();
+      const ip = extractIP(headerText);
+
+      let locationHTML = "<p><b>IP Location:</b> Not found</p>";
 
       if(ip) {
         try {

@@ -36,15 +36,16 @@
       text-align: center;
     }
 
-    textarea {
+    textarea, input {
       width: 100%;
-      height: 150px;
       padding: 12px;
       border: 2px solid #ddd;
       border-radius: 8px;
       font-size: 14px;
       margin-top: 15px;
     }
+
+    textarea { height: 150px; }
 
     button {
       margin-top: 20px;
@@ -57,9 +58,7 @@
       cursor: pointer;
       transition: 0.3s;
     }
-    button:hover {
-      background: #1d4ed8;
-    }
+    button:hover { background: #1d4ed8; }
 
     .result-card {
       margin-top: 20px;
@@ -89,9 +88,9 @@
     <p>Paste your raw email header below and click <b>Analyze</b> to detect SPF, DKIM, DMARC, and more.</p>
     
     <textarea id="emailHeader" placeholder="Paste email header here..."></textarea>
+    <input id="ipInput" placeholder="Enter IP address to check location (e.g., 8.8.8.8)" />
     <button onclick="analyzeHeader()">🔍 Analyze</button>
     <button onclick="window.location.href='pages/history.html'">📜 View History</button>
-
 
     <div id="result" class="result-card" style="display:none;"></div>
   </main>
@@ -101,15 +100,41 @@
   </footer>
 
   <script>
-    function analyzeHeader() {
+    async function analyzeHeader() {
       const resultDiv = document.getElementById("result");
       resultDiv.style.display = "block";
+
+      const ip = document.getElementById("ipInput").value.trim();
+      let locationHTML = "<p><b>IP Location:</b> Not provided</p>";
+
+      if(ip) {
+        try {
+          const response = await fetch(`https://ipapi.co/${ip}/json/`);
+          const data = await response.json();
+          if(data.error) {
+            locationHTML = `<p><b>IP Location:</b> Could not fetch location</p>`;
+          } else {
+            locationHTML = `
+              <p><b>IP:</b> ${data.ip}</p>
+              <p><b>City:</b> ${data.city}</p>
+              <p><b>Region:</b> ${data.region}</p>
+              <p><b>Country:</b> ${data.country_name}</p>
+              <p><b>ISP:</b> ${data.org}</p>
+            `;
+          }
+        } catch (err) {
+          locationHTML = `<p><b>IP Location:</b> Error fetching location</p>`;
+        }
+      }
+
       resultDiv.innerHTML = `
         <h3>Result:</h3>
         <p><b>SPF:</b> <span class="badge success">PASS</span></p>
         <p><b>DKIM:</b> <span class="badge success">PASS</span></p>
         <p><b>DMARC:</b> <span class="badge warning">NOT FOUND</span></p>
         <p><b>Safe Meter:</b> <span class="badge danger">RISK</span></p>
+        <hr>
+        ${locationHTML}
       `;
     }
   </script>

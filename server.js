@@ -10,14 +10,9 @@ const PORT = process.env.PORT || 10000;
 const SECRET = 'secret_key'; // 🔐 Use environment variable in production
 
 // MongoDB connection
-mongoose.connect('mongodb+srv://aandal:aandal2005@emailheadercluster.e2ir8k8.mongodb.net/?retryWrites=true&w=majority&appName=EmailHeaderCluster', {
-  useNewUrlParser: true,
-  useUnifiedTopology: true
-}).then(() => {
-  console.log('✅ MongoDB connected');
-}).catch((err) => {
-  console.error('❌ MongoDB connection error:', err);
-});
+mongoose.connect('mongodb+srv://aandal:aandal2005@emailheadercluster.e2ir8k8.mongodb.net/emailAnalyzer?retryWrites=true&w=majority')
+  .then(() => console.log('✅ MongoDB connected'))
+  .catch((err) => console.error('❌ MongoDB connection error:', err));
 
 // Middleware
 app.use(cors({
@@ -44,19 +39,28 @@ const Header = mongoose.model('Header', headerSchema);
 // Import user model
 const User = require('./models/User');
 
+// 🔐 Admin-only middleware
+function adminOnly(req, res, next) {
+  const token = req.headers['authorization'];
+  if (!token) return res.status(401).json({ error: 'Access denied' });
+
+  try {
+    const verified = jwt.verify(token, SECRET);
+    if (verified.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+    next();
+  } catch (err) {
+    res.status(400).json({ error: 'Invalid token' });
+  }
+}
+
 // 🔐 Register
 app.post('/register', async (req, res) => {
   const { name, email, password } = req.body;
-
-  if (!name || !email || !password) {
-    return res.status(400).json({ error: 'All fields are required' });
-  }
+  if (!name || !email || !password) return res.status(400).json({ error: 'All fields are required' });
 
   try {
     const existing = await User.findOne({ email });
-    if (existing) {
-      return res.status(400).json({ error: 'Email already exists' });
-    }
+    if (existing) return res.status(400).json({ error: 'Email already exists' });
 
     const hashedPassword = await bcrypt.hash(password, 10);
     const user = new User({ name, email, password: hashedPassword });
@@ -72,10 +76,7 @@ app.post('/register', async (req, res) => {
 // 🔐 Login
 app.post('/login', async (req, res) => {
   const { email, password } = req.body;
-
-  if (!email || !password) {
-    return res.status(400).json({ error: 'Email and password required' });
-  }
+  if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
 
   try {
     const user = await User.findOne({ email });
@@ -84,7 +85,7 @@ app.post('/login', async (req, res) => {
     const match = await bcrypt.compare(password, user.password);
     if (!match) return res.status(400).json({ error: 'Invalid password' });
 
-    const token = jwt.sign({ id: user._id }, SECRET, { expiresIn: '2h' });
+    const token = jwt.sign({ id: user._id, role: user.role }, SECRET, { expiresIn: '2h' });
     res.json({ message: '✅ Login successful', token, role: user.role || 'user' });
   } catch (err) {
     console.error(err);
@@ -107,7 +108,6 @@ app.post('/analyze', async (req, res) => {
   const lines = header.split('\n');
   const result = {};
 
-  // Extract basic fields
   lines.forEach(line => {
     const [key, ...rest] = line.split(':');
     const trimmedKey = key.trim();
@@ -116,7 +116,6 @@ app.post('/analyze', async (req, res) => {
     }
   });
 
-  // Security checks
   const spf = (header.match(/spf=(\w+)/i) || [])[1] || 'not found';
   const dkim = (header.match(/dkim=(\w+)/i) || [])[1] || 'not found';
   const dmarc = (header.match(/dmarc=(\w+)/i) || [])[1] || 'not found';
@@ -125,15 +124,10 @@ app.post('/analyze', async (req, res) => {
   result['DKIM Status'] = dkim.toLowerCase();
   result['DMARC Status'] = dmarc.toLowerCase();
 
-  if (spf === 'pass' && dkim === 'pass' && dmarc === 'pass') {
-    result['Safe Meter'] = '✅ Safe – All checks passed';
-  } else if ([spf, dkim, dmarc].filter(v => v === 'pass').length >= 2) {
-    result['Safe Meter'] = '⚠️ Risk – Partial checks passed';
-  } else {
-    result['Safe Meter'] = '❌ Unsafe – Failed checks';
-  }
+  if (spf === 'pass' && dkim === 'pass' && dmarc === 'pass') result['Safe Meter'] = '✅ Safe – All checks passed';
+  else if ([spf, dkim, dmarc].filter(v => v === 'pass').length >= 2) result['Safe Meter'] = '⚠️ Risk – Partial checks passed';
+  else result['Safe Meter'] = '❌ Unsafe – Failed checks';
 
-  // IP Lookup
   const senderIP = extractSenderIP(header);
   if (senderIP) {
     try {
@@ -164,7 +158,6 @@ app.post('/analyze', async (req, res) => {
     ipLocation: result['IP Location']
   });
 
-  // ✅ Send clean JSON response for frontend
   res.json({
     from: result['From'] || "Not found",
     to: result['To'] || "Not found",
@@ -179,11 +172,10 @@ app.post('/analyze', async (req, res) => {
   });
 });
 
-// 📌 Get history (clean format)
+// 📌 Get history
 app.get('/history', async (req, res) => {
   try {
     const history = await Header.find().sort({ createdAt: -1 }).limit(50);
-
     const cleanHistory = history.map(item => ({
       from: item.from,
       to: item.to,
@@ -196,7 +188,6 @@ app.get('/history', async (req, res) => {
       senderIP: item.senderIP,
       ipLocation: item.ipLocation
     }));
-
     res.json(cleanHistory);
   } catch (err) {
     console.error(err);
@@ -204,8 +195,8 @@ app.get('/history', async (req, res) => {
   }
 });
 
-// 📌 Clear history
-app.delete('/history', async (req, res) => {
+// 📌 Clear history (admin only)
+app.delete('/history', adminOnly, async (req, res) => {
   try {
     await Header.deleteMany({});
     res.json({ message: 'History cleared successfully' });

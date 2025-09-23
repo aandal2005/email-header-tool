@@ -2,37 +2,40 @@ const BACKEND_URL = 'https://email-header-backend.onrender.com';
 
 // ✅ LOGIN
 function login() {
-  const email = document.getElementById('username').value; // fixed (use email)
+  const email = document.getElementById('username').value; // email input
   const password = document.getElementById('password').value;
 
   fetch(`${BACKEND_URL}/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password }) // backend expects email
+    body: JSON.stringify({ email, password })
   })
     .then(res => res.json())
     .then(data => {
       if (data.token) {
+        // Save token and role
         localStorage.setItem('token', data.token);
         localStorage.setItem('role', data.role);
-        document.getElementById('loginStatus').innerHTML = `✅ Logged in as ${data.role}`;
-        showDashboard(data.role);
+
+        // Show admin panel if admin
+        if (data.role === 'admin') {
+          document.getElementById('adminPanel').style.display = 'block';
+        }
+
+        // Show success message
+        const roleText = data.role === 'admin' ? ' (Admin)' : '';
+        document.getElementById('loginMessage').innerText = `✅ Login successful${roleText}`;
+
+        // Optional: redirect to history page
+        window.location.href = 'history.html';
       } else {
-        document.getElementById('loginStatus').innerHTML = '❌ Login failed';
+        document.getElementById('loginMessage').innerText = `❌ ${data.error}`;
       }
     })
     .catch(err => {
       console.error('❌ Login error:', err);
-      document.getElementById('loginStatus').innerHTML = '❌ Error during login';
+      document.getElementById('loginMessage').innerText = '❌ Login failed';
     });
-}
-
-function showDashboard(role) {
-  if (role === 'admin') {
-    alert('Welcome Admin 👑');
-  } else {
-    alert('Welcome User 😊');
-  }
 }
 
 // ✅ ANALYZE HEADER
@@ -48,7 +51,7 @@ function analyzeHeader() {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ header })
   })
-    .then(response => response.json())
+    .then(res => res.json())
     .then(data => {
       const resultDiv = document.getElementById('result');
       resultDiv.innerHTML = `
@@ -122,27 +125,35 @@ function fetchHistory() {
     });
 }
 
-// ✅ CLEAR HISTORY
-function clearHistory() {
-  fetch(`${BACKEND_URL}/history`, { method: 'DELETE' })
-    .then(res => res.json())
-    .then(data => {
-      alert('✅ ' + data.message);
-      document.getElementById('history').innerHTML = '<p>No history found.</p>';
-    })
-    .catch(error => {
-      console.error('❌ Clear history error:', error);
-      alert('❌ Failed to clear history');
-    });
-}
+// ✅ ADMIN-ONLY CLEAR HISTORY
+document.getElementById('clearHistory')?.addEventListener('click', async () => {
+  const token = localStorage.getItem('token');
+  const role = localStorage.getItem('role');
 
-// ✅ VIEW HISTORY (fixed)
+  if (!token || role !== 'admin') {
+    alert('Access denied – Admins only');
+    return;
+  }
+
+  const res = await fetch(`${BACKEND_URL}/history`, {
+    method: 'DELETE',
+    headers: { 'Authorization': token }
+  });
+
+  const data = await res.json();
+  alert(data.message || data.error);
+
+  // Refresh history after clearing
+  fetchHistory();
+});
+
+// ✅ VIEW HISTORY
 function viewHistory() {
   const historyDiv = document.getElementById('history');
   if (historyDiv.style.display === 'none') {
     fetchHistory(); // always load when showing
   } else {
-    historyDiv.style.display = 'none'; // toggle hide
+    historyDiv.style.display = 'none';
   }
 }
 
@@ -152,10 +163,9 @@ function refreshHistory() {
 }
 
 // ✅ BUTTON EVENTS
-document.getElementById('analyzeBtn').addEventListener('click', analyzeHeader);
-document.getElementById('viewBtn').addEventListener('click', viewHistory);
-document.getElementById('refreshBtn').addEventListener('click', refreshHistory);
-document.getElementById('clearBtn').addEventListener('click', clearHistory);
+document.getElementById('analyzeBtn')?.addEventListener('click', analyzeHeader);
+document.getElementById('viewBtn')?.addEventListener('click', viewHistory);
+document.getElementById('refreshBtn')?.addEventListener('click', refreshHistory);
 
 // Auto load history when page loads
 window.onload = fetchHistory;

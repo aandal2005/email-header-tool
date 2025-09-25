@@ -11,7 +11,7 @@ const app = express();
 
 const PORT = process.env.PORT || 10000;
 const SECRET = process.env.JWT_SECRET || 'secret_key';
-const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://aandal:aandal2005@emailheadercluster.e2ir8k8.mongodb.net/emailAnalyzer?retryWrites=true&w=majority';
+const MONGO_URI = process.env.MONGO_URI || 'your-mongo-uri-here';
 
 // MongoDB connection
 mongoose.connect(MONGO_URI)
@@ -20,7 +20,8 @@ mongoose.connect(MONGO_URI)
 
 // Middleware
 app.use(cors({
-  origin: 'https://email-header-frontend.onrender.com',
+  origin: ['https://your-frontend.github.io', 'http://localhost:5500'], // replace with your frontend URL
+  methods: ['GET','POST','DELETE','OPTIONS'],
 }));
 app.use(express.json());
 
@@ -57,7 +58,7 @@ function adminOnly(req, res, next) {
   }
 }
 
-// DMARC Helper Functions
+// DMARC Helpers
 async function getDmarcRecord(domain) {
   try {
     const records = await dns.resolveTxt(`_dmarc.${domain}`);
@@ -70,6 +71,12 @@ async function getDmarcRecord(domain) {
 function parseDmarcPolicy(record) {
   const match = record.match(/p=(none|quarantine|reject)/i);
   return match ? match[1].toLowerCase() : 'unknown';
+}
+
+// Extract Sender IP
+function extractSenderIP(headerText) {
+  const matches = headerText.match(/\[(\d{1,3}(?:\.\d{1,3}){3})\]/);
+  return matches ? matches[1] : null;
 }
 
 // Register Route
@@ -112,12 +119,6 @@ app.post('/login', async (req, res) => {
   }
 });
 
-// Extract Sender IP
-function extractSenderIP(headerText) {
-  const matches = headerText.match(/\[(\d{1,3}(?:\.\d{1,3}){3})\]/);
-  return matches ? matches[1] : null;
-}
-
 // Analyze Route
 app.post('/analyze', async (req, res) => {
   const header = req.body.header;
@@ -142,10 +143,10 @@ app.post('/analyze', async (req, res) => {
   const spf = spfRaw ? spfRaw.toLowerCase() : 'not found';
   const dkim = dkimRaw ? dkimRaw.toLowerCase() : 'not found';
 
-  // DMARC lookup (handles emails with display name)
+  // DMARC lookup
   let fromDomain = null;
   if (result['From']) {
-    const match = result['From'].match(/<(.+)>/); // extract email from display name
+    const match = result['From'].match(/<(.+)>/);
     const fromEmail = match?.[1] || result['From'];
     fromDomain = fromEmail.split('@')[1];
   }
@@ -174,7 +175,7 @@ app.post('/analyze', async (req, res) => {
   result['Sender IP'] = senderIP || 'Not found';
   if (senderIP) {
     try {
-      const geo = await fetch(`http://ip-api.com/json/${senderIP}`);
+      const geo = await fetch(`https://ip-api.com/json/${senderIP}`);
       const loc = await geo.json();
       result['IP Location'] = loc.status === 'success' ? `${loc.city}, ${loc.regionName}, ${loc.country}` : '❌ Lookup failed';
     } catch {
@@ -216,40 +217,24 @@ app.post('/analyze', async (req, res) => {
   });
 });
 
-// Get History
+// History Routes
 app.get('/history', async (req, res) => {
   try {
     const history = await Header.find().sort({ createdAt: -1 }).limit(50);
-    res.json(history.map(item => ({
-      from: item.from,
-      to: item.to,
-      subject: item.subject,
-      date: item.date,
-      spf: item.spf,
-      dkim: item.dkim,
-      dmarc: item.dmarc,
-      safeMeter: item.safeMeter,
-      senderIP: item.senderIP,
-      ipLocation: item.ipLocation
-    })));
+    res.json(history);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: '❌ Failed to fetch history' });
+    res.status(500).json({ error: 'Failed to fetch history' });
   }
 });
 
-// Clear History (Admin Only)
 app.delete('/history', adminOnly, async (req, res) => {
   try {
     await Header.deleteMany({});
     res.json({ message: 'History cleared successfully' });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: '❌ Failed to clear history' });
+    res.status(500).json({ error: 'Failed to clear history' });
   }
 });
 
 // Start Server
-app.listen(PORT, () => {
-  console.log(`✅ Server running at http://localhost:${PORT}`);
-});
+app.listen(PORT, () => console.log(`✅ Server running at http://localhost:${PORT}`));

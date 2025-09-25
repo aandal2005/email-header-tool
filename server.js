@@ -11,7 +11,7 @@ const app = express();
 
 const PORT = process.env.PORT || 10000;
 const SECRET = process.env.JWT_SECRET || 'secret_key';
-const MONGO_URI = process.env.MONGO_URI || 'your-mongo-uri-here';
+const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://aandal:aandal2005@emailheadercluster.e2ir8k8.mongodb.net/emailAnalyzer?retryWrites=true&w=majority';
 
 // MongoDB connection
 mongoose.connect(MONGO_URI)

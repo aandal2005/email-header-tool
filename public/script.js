@@ -42,6 +42,10 @@ submitBtn.addEventListener('click', async () => {
       body: JSON.stringify(isSignup ? { name, email, password } : { email, password })
     });
 
+    if (res.status === 404) {
+      throw new Error(`Endpoint not found: ${endpoint}`);
+    }
+
     const data = await res.json();
 
     if (!res.ok) {
@@ -52,115 +56,113 @@ submitBtn.addEventListener('click', async () => {
       message.textContent = data.message || "✅ Success";
 
       if (!isSignup && data.token) {
-        // Save token + role
         localStorage.setItem("token", data.token);
         localStorage.setItem("role", data.role);
 
-        // Show admin panel link if admin
-        if (data.role === "admin") {
-          adminPanelLink.style.display = "block";
-        }
+        if (data.role === "admin") adminPanelLink.style.display = "block";
 
-        // Redirect to analyzer after login
         setTimeout(() => window.location.href = 'analyzer.html', 1200);
       }
     }
   } catch (err) {
-    console.error("❌ Error:", err);
+    console.error("❌ Login/Register error:", err);
     message.className = 'error';
-    message.textContent = "❌ Network error";
+    message.textContent = `❌ ${err.message}`;
   }
 });
 
 // ------------------ ANALYZE HEADER ------------------
-function analyzeHeader() {
+async function analyzeHeader() {
   const header = document.getElementById('headerInput').value;
   if (!header.trim()) {
     document.getElementById('result').innerHTML = '<p style="color:red;">❌ Please paste an email header.</p>';
     return;
   }
 
-  fetch(`${BACKEND_URL}/analyze`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ header })
-  })
-    .then(res => res.json())
-    .then(data => {
-      const resultDiv = document.getElementById('result');
-      resultDiv.innerHTML = `
-        <table border="1" style="border-collapse: collapse; margin-top: 10px; width: 100%;">
-          <tr><th>From</th><td>${data.from}</td></tr>
-          <tr><th>To</th><td>${data.to}</td></tr>
-          <tr><th>Subject</th><td>${data.subject}</td></tr>
-          <tr><th>Date</th><td>${data.date}</td></tr>
-          <tr><th>SPF</th><td>${data.spf}</td></tr>
-          <tr><th>DKIM</th><td>${data.dkim}</td></tr>
-          <tr><th>DMARC</th><td>${data.dmarc}</td></tr>
-          <tr><th>Safe Meter</th><td>${data.safeMeter}</td></tr>
-          <tr><th>IP</th><td>${data.senderIP}</td></tr>
-          <tr><th>Location</th><td>${data.ipLocation}</td></tr>
-        </table>
-      `;
-      fetchHistory();
-    })
-    .catch(error => {
-      console.error('❌ Analyze error:', error);
-      document.getElementById('result').innerHTML = '<p style="color:red;">❌ Failed to analyze header.</p>';
+  try {
+    const res = await fetch(`${BACKEND_URL}/analyze`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ header })
     });
+
+    if (res.status === 404) throw new Error('/analyze endpoint not found');
+
+    const data = await res.json();
+
+    const resultDiv = document.getElementById('result');
+    resultDiv.innerHTML = `
+      <table border="1" style="border-collapse: collapse; margin-top: 10px; width: 100%;">
+        <tr><th>From</th><td>${data.from}</td></tr>
+        <tr><th>To</th><td>${data.to}</td></tr>
+        <tr><th>Subject</th><td>${data.subject}</td></tr>
+        <tr><th>Date</th><td>${data.date}</td></tr>
+        <tr><th>SPF</th><td>${data.spf}</td></tr>
+        <tr><th>DKIM</th><td>${data.dkim}</td></tr>
+        <tr><th>DMARC</th><td>${data.dmarc}</td></tr>
+        <tr><th>Safe Meter</th><td>${data.safeMeter}</td></tr>
+        <tr><th>IP</th><td>${data.senderIP}</td></tr>
+        <tr><th>Location</th><td>${data.ipLocation}</td></tr>
+      </table>
+    `;
+    fetchHistory();
+  } catch (err) {
+    console.error('❌ Analyze error:', err);
+    document.getElementById('result').innerHTML = `<p style="color:red;">❌ ${err.message}</p>`;
+  }
 }
 
 // ------------------ FETCH HISTORY ------------------
-function fetchHistory() {
-  fetch(`${BACKEND_URL}/history`)
-    .then(res => res.json())
-    .then(history => {
-      const historyDiv = document.getElementById('history');
-      if (!historyDiv) return; // if not on history page
-      historyDiv.style.display = 'block';
-      historyDiv.innerHTML = '';
+async function fetchHistory() {
+  try {
+    const res = await fetch(`${BACKEND_URL}/history`);
+    if (res.status === 404) throw new Error('/history endpoint not found');
 
-      if (!history || history.length === 0) {
-        historyDiv.innerHTML = '<p>No history found.</p>';
-        return;
-      }
+    const history = await res.json();
+    const historyDiv = document.getElementById('history');
+    if (!historyDiv) return;
 
-      let table = `
-        <table border="1" style="border-collapse: collapse; width: 100%; margin-top:10px;">
-          <tr>
-            <th>From</th><th>To</th><th>Subject</th><th>Date</th>
-            <th>SPF</th><th>DKIM</th><th>DMARC</th>
-            <th>Safe Meter</th><th>IP</th><th>Location</th>
-          </tr>
+    historyDiv.style.display = 'block';
+    historyDiv.innerHTML = '';
+
+    if (!history || history.length === 0) {
+      historyDiv.innerHTML = '<p>No history found.</p>';
+      return;
+    }
+
+    let table = `
+      <table border="1" style="border-collapse: collapse; width: 100%; margin-top:10px;">
+        <tr>
+          <th>From</th><th>To</th><th>Subject</th><th>Date</th>
+          <th>SPF</th><th>DKIM</th><th>DMARC</th>
+          <th>Safe Meter</th><th>IP</th><th>Location</th>
+        </tr>
+    `;
+
+    history.forEach(item => {
+      table += `
+        <tr>
+          <td>${item.from || '—'}</td>
+          <td>${item.to || '—'}</td>
+          <td>${item.subject || '—'}</td>
+          <td>${item.date || '—'}</td>
+          <td>${item.spf || '—'}</td>
+          <td>${item.dkim || '—'}</td>
+          <td>${item.dmarc || '—'}</td>
+          <td>${item.safeMeter || '—'}</td>
+          <td>${item.senderIP || '—'}</td>
+          <td>${item.ipLocation || '—'}</td>
+        </tr>
       `;
-
-      history.forEach(item => {
-        table += `
-          <tr>
-            <td>${item.from || '—'}</td>
-            <td>${item.to || '—'}</td>
-            <td>${item.subject || '—'}</td>
-            <td>${item.date || '—'}</td>
-            <td>${item.spf || '—'}</td>
-            <td>${item.dkim || '—'}</td>
-            <td>${item.dmarc || '—'}</td>
-            <td>${item.safeMeter || '—'}</td>
-            <td>${item.senderIP || '—'}</td>
-            <td>${item.ipLocation || '—'}</td>
-          </tr>
-        `;
-      });
-
-      table += `</table>`;
-      historyDiv.innerHTML = table;
-    })
-    .catch(error => {
-      console.error('❌ Fetch history error:', error);
-      const historyDiv = document.getElementById('history');
-      if (historyDiv) {
-        historyDiv.innerHTML = '<p style="color:red;">❌ Error fetching history.</p>';
-      }
     });
+
+    table += `</table>`;
+    historyDiv.innerHTML = table;
+  } catch (err) {
+    console.error('❌ Fetch history error:', err);
+    const historyDiv = document.getElementById('history');
+    if (historyDiv) historyDiv.innerHTML = `<p style="color:red;">❌ ${err.message}</p>`;
+  }
 }
 
 // ------------------ ADMIN CLEAR HISTORY ------------------
@@ -173,14 +175,21 @@ document.getElementById('clearHistory')?.addEventListener('click', async () => {
     return;
   }
 
-  const res = await fetch(`${BACKEND_URL}/history`, {
-    method: 'DELETE',
-    headers: { 'Authorization': token }
-  });
+  try {
+    const res = await fetch(`${BACKEND_URL}/history`, {
+      method: 'DELETE',
+      headers: { 'Authorization': token }
+    });
 
-  const data = await res.json();
-  alert(data.message || data.error);
-  fetchHistory();
+    if (res.status === 404) throw new Error('/history DELETE endpoint not found');
+
+    const data = await res.json();
+    alert(data.message || data.error);
+    fetchHistory();
+  } catch (err) {
+    console.error('❌ Clear history error:', err);
+    alert(`❌ ${err.message}`);
+  }
 });
 
 // ------------------ HISTORY BUTTONS ------------------

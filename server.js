@@ -20,7 +20,7 @@ mongoose.connect(MONGO_URI)
 
 // Middleware
 app.use(cors({
-  origin: ['https://your-frontend.github.io', 'http://localhost:5500'], // replace with your frontend URL
+  origin: ['http://127.0.0.1:5500', 'https://your-frontend.github.io'], // replace with actual frontend
   methods: ['GET','POST','DELETE','OPTIONS'],
 }));
 app.use(express.json());

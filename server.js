@@ -4,11 +4,13 @@ const cors = require('cors');
 const jwt = require('jsonwebtoken');
 const fetch = require('node-fetch');
 const bcrypt = require('bcryptjs');
-require('dotenv').config(); // For environment variables
+const dns = require('dns').promises;
+require('dotenv').config();
+
 const app = express();
 
 const PORT = process.env.PORT || 10000;
-const SECRET = process.env.JWT_SECRET || 'secret_key'; // 🔐 Use env var in production
+const SECRET = process.env.JWT_SECRET || 'secret_key';
 const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://aandal:aandal2005@emailheadercluster.e2ir8k8.mongodb.net/emailAnalyzer?retryWrites=true&w=majority';
 
 // MongoDB connection
@@ -22,7 +24,7 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// Mongoose schema for email headers
+// Header Schema
 const headerSchema = new mongoose.Schema({
   from: String,
   to: String,
@@ -41,7 +43,7 @@ const Header = mongoose.model('Header', headerSchema);
 // User model
 const User = require('./models/User');
 
-// 🔐 Admin-only middleware
+// Admin-only middleware
 function adminOnly(req, res, next) {
   const token = req.headers['authorization'];
   if (!token) return res.status(401).json({ error: 'Access denied' });
@@ -55,7 +57,22 @@ function adminOnly(req, res, next) {
   }
 }
 
-// 🔐 Register
+// DMARC Helper Functions
+async function getDmarcRecord(domain) {
+  try {
+    const records = await dns.resolveTxt(`_dmarc.${domain}`);
+    return records.flat().join('');
+  } catch {
+    return null;
+  }
+}
+
+function parseDmarcPolicy(record) {
+  const match = record.match(/p=(none|quarantine|reject)/i);
+  return match ? match[1].toLowerCase() : 'unknown';
+}
+
+// Register Route
 app.post('/register', async (req, res) => {
   const { name, email, password } = req.body;
   if (!name || !email || !password) return res.status(400).json({ error: 'All fields are required' });
@@ -75,7 +92,7 @@ app.post('/register', async (req, res) => {
   }
 });
 
-// 🔐 Login
+// Login Route
 app.post('/login', async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
@@ -95,13 +112,13 @@ app.post('/login', async (req, res) => {
   }
 });
 
-// Extract sender IP (IPv4)
+// Extract Sender IP
 function extractSenderIP(headerText) {
   const matches = headerText.match(/\[(\d{1,3}(?:\.\d{1,3}){3})\]/);
   return matches ? matches[1] : null;
 }
 
-// 📌 Analyze email header (Improved)
+// Analyze Route
 app.post('/analyze', async (req, res) => {
   const header = req.body.header;
   if (!header) return res.status(400).json({ error: 'No header provided' });
@@ -115,43 +132,51 @@ app.post('/analyze', async (req, res) => {
     const [key, ...rest] = line.split(':');
     if (!key || rest.length === 0) return;
     const trimmedKey = key.trim();
-    if (importantKeys.includes(trimmedKey)) {
-      result[trimmedKey] = rest.join(':').trim();
-    }
+    if (importantKeys.includes(trimmedKey)) result[trimmedKey] = rest.join(':').trim();
   });
 
-  // Extract SPF, DKIM, DMARC
+  // SPF and DKIM extraction
   const spfRaw = (header.match(/spf=(\w+)/i) || [])[1];
   const dkimRaw = (header.match(/dkim=(\w+)/i) || [])[1];
-  const dmarcRaw = (header.match(/dmarc=(\w+)/i) || [])[1];
 
   const spf = spfRaw ? spfRaw.toLowerCase() : 'not found';
   const dkim = dkimRaw ? dkimRaw.toLowerCase() : 'not found';
-  const dmarc = dmarcRaw ? dmarcRaw.toLowerCase() : 'not found';
+
+  // DMARC lookup (handles emails with display name)
+  let fromDomain = null;
+  if (result['From']) {
+    const match = result['From'].match(/<(.+)>/); // extract email from display name
+    const fromEmail = match?.[1] || result['From'];
+    fromDomain = fromEmail.split('@')[1];
+  }
+
+  let dmarc = 'not found';
+  if (fromDomain) {
+    const dmarcRecord = await getDmarcRecord(fromDomain);
+    if (dmarcRecord) dmarc = parseDmarcPolicy(dmarcRecord);
+  }
 
   result['SPF Status'] = spf;
   result['DKIM Status'] = dkim;
   result['DMARC Status'] = dmarc;
 
-  // Improved Safe Meter
+  // Safe Meter
   const statuses = [spf, dkim, dmarc];
   const passCount = statuses.filter(v => v === 'pass').length;
-  const unknownCount = statuses.filter(v => v === 'not found').length;
+  const unknownCount = statuses.filter(v => v === 'not found' || v === 'none').length;
 
   if (passCount === 3) result['Safe Meter'] = '✅ Safe – All checks passed';
   else if (passCount >= 2 || (passCount >= 1 && unknownCount > 0)) result['Safe Meter'] = '⚠️ Risk – Partial checks passed';
   else result['Safe Meter'] = '❌ Unsafe – Failed checks';
 
-  // Sender IP & location
+  // Sender IP & Geolocation
   const senderIP = extractSenderIP(header);
   result['Sender IP'] = senderIP || 'Not found';
-
   if (senderIP) {
     try {
       const geo = await fetch(`http://ip-api.com/json/${senderIP}`);
       const loc = await geo.json();
-      if (loc.status === 'success') result['IP Location'] = `${loc.city}, ${loc.regionName}, ${loc.country}`;
-      else result['IP Location'] = '❌ Lookup failed';
+      result['IP Location'] = loc.status === 'success' ? `${loc.city}, ${loc.regionName}, ${loc.country}` : '❌ Lookup failed';
     } catch {
       result['IP Location'] = '❌ Lookup failed';
     }
@@ -191,7 +216,7 @@ app.post('/analyze', async (req, res) => {
   });
 });
 
-// 📌 Get history
+// Get History
 app.get('/history', async (req, res) => {
   try {
     const history = await Header.find().sort({ createdAt: -1 }).limit(50);
@@ -213,7 +238,7 @@ app.get('/history', async (req, res) => {
   }
 });
 
-// 📌 Clear history (admin only)
+// Clear History (Admin Only)
 app.delete('/history', adminOnly, async (req, res) => {
   try {
     await Header.deleteMany({});
@@ -224,7 +249,7 @@ app.delete('/history', adminOnly, async (req, res) => {
   }
 });
 
-// Start server
+// Start Server
 app.listen(PORT, () => {
   console.log(`✅ Server running at http://localhost:${PORT}`);
 });

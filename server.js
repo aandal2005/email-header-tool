@@ -4,15 +4,17 @@ const cors = require('cors');
 const jwt = require('jsonwebtoken');
 const fetch = require('node-fetch');
 const bcrypt = require('bcryptjs');
+require('dotenv').config(); // For environment variables
 const app = express();
 
 const PORT = process.env.PORT || 10000;
-const SECRET = 'secret_key'; // 🔐 Use environment variable in production
+const SECRET = process.env.JWT_SECRET || 'secret_key'; // 🔐 Use env var in production
+const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://aandal:aandal2005@emailheadercluster.e2ir8k8.mongodb.net/emailAnalyzer?retryWrites=true&w=majority';
 
 // MongoDB connection
-mongoose.connect('mongodb+srv://aandal:aandal2005@emailheadercluster.e2ir8k8.mongodb.net/emailAnalyzer?retryWrites=true&w=majority')
+mongoose.connect(MONGO_URI)
   .then(() => console.log('✅ MongoDB connected'))
-  .catch((err) => console.error('❌ MongoDB connection error:', err));
+  .catch(err => console.error('❌ MongoDB connection error:', err));
 
 // Middleware
 app.use(cors({
@@ -36,7 +38,7 @@ const headerSchema = new mongoose.Schema({
 });
 const Header = mongoose.model('Header', headerSchema);
 
-// Import user model
+// User model
 const User = require('./models/User');
 
 // 🔐 Admin-only middleware
@@ -56,19 +58,13 @@ function adminOnly(req, res, next) {
 // 🔐 Register
 app.post('/register', async (req, res) => {
   const { name, email, password } = req.body;
-  if (!name || !email || !password) {
-    return res.status(400).json({ error: 'All fields are required' });
-  }
+  if (!name || !email || !password) return res.status(400).json({ error: 'All fields are required' });
 
   try {
     const existing = await User.findOne({ email });
-    if (existing) {
-      return res.status(400).json({ error: 'Email already exists' });
-    }
+    if (existing) return res.status(400).json({ error: 'Email already exists' });
 
     const hashedPassword = await bcrypt.hash(password, 10);
-
-    // 👇 Set default role as "user"
     const user = new User({ name, email, password: hashedPassword, role: 'user' });
     await user.save();
 
@@ -99,13 +95,13 @@ app.post('/login', async (req, res) => {
   }
 });
 
-// Extract sender IP
-function extractSenderIP(header) {
-  const match = header.match(/Received: from .*\[(\d+\.\d+\.\d+\.\d+)\]/);
-  return match ? match[1] : null;
+// Extract sender IP (IPv4)
+function extractSenderIP(headerText) {
+  const matches = headerText.match(/\[(\d{1,3}(?:\.\d{1,3}){3})\]/);
+  return matches ? matches[1] : null;
 }
 
-// 📌 Analyze email header
+// 📌 Analyze email header (Improved)
 app.post('/analyze', async (req, res) => {
   const header = req.body.header;
   if (!header) return res.status(400).json({ error: 'No header provided' });
@@ -114,55 +110,72 @@ app.post('/analyze', async (req, res) => {
   const lines = header.split('\n');
   const result = {};
 
+  // Extract basic header info
   lines.forEach(line => {
     const [key, ...rest] = line.split(':');
+    if (!key || rest.length === 0) return;
     const trimmedKey = key.trim();
-    if (importantKeys.includes(trimmedKey) && rest.length > 0) {
+    if (importantKeys.includes(trimmedKey)) {
       result[trimmedKey] = rest.join(':').trim();
     }
   });
 
-  const spf = (header.match(/spf=(\w+)/i) || [])[1] || 'not found';
-  const dkim = (header.match(/dkim=(\w+)/i) || [])[1] || 'not found';
-  const dmarc = (header.match(/dmarc=(\w+)/i) || [])[1] || 'not found';
+  // Extract SPF, DKIM, DMARC
+  const spfRaw = (header.match(/spf=(\w+)/i) || [])[1];
+  const dkimRaw = (header.match(/dkim=(\w+)/i) || [])[1];
+  const dmarcRaw = (header.match(/dmarc=(\w+)/i) || [])[1];
 
-  result['SPF Status'] = spf.toLowerCase();
-  result['DKIM Status'] = dkim.toLowerCase();
-  result['DMARC Status'] = dmarc.toLowerCase();
+  const spf = spfRaw ? spfRaw.toLowerCase() : 'not found';
+  const dkim = dkimRaw ? dkimRaw.toLowerCase() : 'not found';
+  const dmarc = dmarcRaw ? dmarcRaw.toLowerCase() : 'not found';
 
-  if (spf === 'pass' && dkim === 'pass' && dmarc === 'pass') result['Safe Meter'] = '✅ Safe – All checks passed';
-  else if ([spf, dkim, dmarc].filter(v => v === 'pass').length >= 2) result['Safe Meter'] = '⚠️ Risk – Partial checks passed';
+  result['SPF Status'] = spf;
+  result['DKIM Status'] = dkim;
+  result['DMARC Status'] = dmarc;
+
+  // Improved Safe Meter
+  const statuses = [spf, dkim, dmarc];
+  const passCount = statuses.filter(v => v === 'pass').length;
+  const unknownCount = statuses.filter(v => v === 'not found').length;
+
+  if (passCount === 3) result['Safe Meter'] = '✅ Safe – All checks passed';
+  else if (passCount >= 2 || (passCount >= 1 && unknownCount > 0)) result['Safe Meter'] = '⚠️ Risk – Partial checks passed';
   else result['Safe Meter'] = '❌ Unsafe – Failed checks';
 
+  // Sender IP & location
   const senderIP = extractSenderIP(header);
+  result['Sender IP'] = senderIP || 'Not found';
+
   if (senderIP) {
     try {
       const geo = await fetch(`http://ip-api.com/json/${senderIP}`);
       const loc = await geo.json();
-      result['Sender IP'] = senderIP;
-      result['IP Location'] = `${loc.city}, ${loc.regionName}, ${loc.country}`;
+      if (loc.status === 'success') result['IP Location'] = `${loc.city}, ${loc.regionName}, ${loc.country}`;
+      else result['IP Location'] = '❌ Lookup failed';
     } catch {
-      result['Sender IP'] = senderIP;
       result['IP Location'] = '❌ Lookup failed';
     }
   } else {
-    result['Sender IP'] = 'Not found';
     result['IP Location'] = 'N/A';
   }
 
   // Save to DB
-  await Header.create({
-    from: result['From'],
-    to: result['To'],
-    subject: result['Subject'],
-    date: result['Date'],
-    spf: result['SPF Status'],
-    dkim: result['DKIM Status'],
-    dmarc: result['DMARC Status'],
-    safeMeter: result['Safe Meter'],
-    senderIP: result['Sender IP'],
-    ipLocation: result['IP Location']
-  });
+  try {
+    await Header.create({
+      from: result['From'],
+      to: result['To'],
+      subject: result['Subject'],
+      date: result['Date'],
+      spf: result['SPF Status'],
+      dkim: result['DKIM Status'],
+      dmarc: result['DMARC Status'],
+      safeMeter: result['Safe Meter'],
+      senderIP: result['Sender IP'],
+      ipLocation: result['IP Location']
+    });
+  } catch (err) {
+    console.error('DB Save Error:', err);
+  }
 
   res.json({
     from: result['From'] || "Not found",
@@ -182,7 +195,7 @@ app.post('/analyze', async (req, res) => {
 app.get('/history', async (req, res) => {
   try {
     const history = await Header.find().sort({ createdAt: -1 }).limit(50);
-    const cleanHistory = history.map(item => ({
+    res.json(history.map(item => ({
       from: item.from,
       to: item.to,
       subject: item.subject,
@@ -193,8 +206,7 @@ app.get('/history', async (req, res) => {
       safeMeter: item.safeMeter,
       senderIP: item.senderIP,
       ipLocation: item.ipLocation
-    }));
-    res.json(cleanHistory);
+    })));
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: '❌ Failed to fetch history' });

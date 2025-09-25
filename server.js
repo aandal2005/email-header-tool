@@ -56,20 +56,26 @@ function adminOnly(req, res, next) {
 // 🔐 Register
 app.post('/register', async (req, res) => {
   const { name, email, password } = req.body;
-  if (!name || !email || !password) return res.status(400).json({ error: 'All fields are required' });
+  if (!name || !email || !password) {
+    return res.status(400).json({ error: 'All fields are required' });
+  }
 
   try {
     const existing = await User.findOne({ email });
-    if (existing) return res.status(400).json({ error: 'Email already exists' });
+    if (existing) {
+      return res.status(400).json({ error: 'Email already exists' });
+    }
 
     const hashedPassword = await bcrypt.hash(password, 10);
-    const user = new User({ name, email, password: hashedPassword });
+
+    // 👇 Set default role as "user"
+    const user = new User({ name, email, password: hashedPassword, role: 'user' });
     await user.save();
 
     res.json({ message: '✅ Registered successfully' });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: '❌ Server error' });
+    console.error("Register error:", err);
+    res.status(500).json({ error: '❌ Server error during registration' });
   }
 });
 

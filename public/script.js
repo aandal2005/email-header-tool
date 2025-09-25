@@ -1,44 +1,78 @@
-const BACKEND_URL = 'https://email-header-backend.onrender.com';
+const BACKEND_URL = "https://email-header-backend.onrender.com";
 
-// ✅ LOGIN
-function login() {
-  const email = document.getElementById('username').value; // email input
-  const password = document.getElementById('password').value;
+// ------------------ LOGIN + REGISTER ------------------
+let isSignup = false;
 
-  fetch(`${BACKEND_URL}/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password })
-  })
-    .then(res => res.json())
-    .then(data => {
-      if (data.token) {
-        // Save token and role
-        localStorage.setItem('token', data.token);
-        localStorage.setItem('role', data.role);
+const nameInput = document.getElementById('name');
+const emailInput = document.getElementById('email');
+const passwordInput = document.getElementById('password');
+const formTitle = document.getElementById('formTitle');
+const submitBtn = document.getElementById('submitBtn');
+const message = document.getElementById('message');
+const adminPanelLink = document.getElementById('adminPanelLink');
 
-        // Show admin panel if admin
-        if (data.role === 'admin') {
-          document.getElementById('adminPanel').style.display = 'block';
-        }
-
-        // Show success message
-        const roleText = data.role === 'admin' ? ' (Admin)' : '';
-        document.getElementById('loginMessage').innerText = `✅ Login successful${roleText}`;
-
-        // Optional: redirect to history page
-        window.location.href = 'history.html';
-      } else {
-        document.getElementById('loginMessage').innerText = `❌ ${data.error}`;
-      }
-    })
-    .catch(err => {
-      console.error('❌ Login error:', err);
-      document.getElementById('loginMessage').innerText = '❌ Login failed';
-    });
+function toggleForm() {
+  isSignup = !isSignup;
+  nameInput.style.display = isSignup ? 'block' : 'none';
+  formTitle.textContent = isSignup ? 'Sign Up' : 'Login';
+  submitBtn.textContent = isSignup ? 'Sign Up' : 'Login';
+  document.querySelector('.toggle').textContent =
+    isSignup ? 'Already have an account? Login' : "Don't have an account? Sign Up";
+  message.textContent = '';
+  message.className = '';
 }
 
-// ✅ ANALYZE HEADER
+submitBtn.addEventListener('click', async () => {
+  const email = emailInput.value.trim();
+  const password = passwordInput.value.trim();
+  const name = nameInput.value.trim();
+
+  if (!email || !password || (isSignup && !name)) {
+    message.className = 'error';
+    message.textContent = '❌ All fields are required';
+    return;
+  }
+
+  const endpoint = isSignup ? "/register" : "/login";
+
+  try {
+    const res = await fetch(`${BACKEND_URL}${endpoint}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(isSignup ? { name, email, password } : { email, password })
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      message.className = 'error';
+      message.textContent = `❌ ${data.error || "Something went wrong"}`;
+    } else {
+      message.className = 'success';
+      message.textContent = data.message || "✅ Success";
+
+      if (!isSignup && data.token) {
+        // Save token + role
+        localStorage.setItem("token", data.token);
+        localStorage.setItem("role", data.role);
+
+        // Show admin panel link if admin
+        if (data.role === "admin") {
+          adminPanelLink.style.display = "block";
+        }
+
+        // Redirect to analyzer after login
+        setTimeout(() => window.location.href = 'analyzer.html', 1200);
+      }
+    }
+  } catch (err) {
+    console.error("❌ Error:", err);
+    message.className = 'error';
+    message.textContent = "❌ Network error";
+  }
+});
+
+// ------------------ ANALYZE HEADER ------------------
 function analyzeHeader() {
   const header = document.getElementById('headerInput').value;
   if (!header.trim()) {
@@ -68,7 +102,7 @@ function analyzeHeader() {
           <tr><th>Location</th><td>${data.ipLocation}</td></tr>
         </table>
       `;
-      fetchHistory(); // refresh history after analyze
+      fetchHistory();
     })
     .catch(error => {
       console.error('❌ Analyze error:', error);
@@ -76,13 +110,14 @@ function analyzeHeader() {
     });
 }
 
-// ✅ FETCH HISTORY
+// ------------------ FETCH HISTORY ------------------
 function fetchHistory() {
   fetch(`${BACKEND_URL}/history`)
     .then(res => res.json())
     .then(history => {
       const historyDiv = document.getElementById('history');
-      historyDiv.style.display = 'block'; // always show history
+      if (!historyDiv) return; // if not on history page
+      historyDiv.style.display = 'block';
       historyDiv.innerHTML = '';
 
       if (!history || history.length === 0) {
@@ -121,11 +156,14 @@ function fetchHistory() {
     })
     .catch(error => {
       console.error('❌ Fetch history error:', error);
-      document.getElementById('history').innerHTML = '<p style="color:red;">❌ Error fetching history.</p>';
+      const historyDiv = document.getElementById('history');
+      if (historyDiv) {
+        historyDiv.innerHTML = '<p style="color:red;">❌ Error fetching history.</p>';
+      }
     });
 }
 
-// ✅ ADMIN-ONLY CLEAR HISTORY
+// ------------------ ADMIN CLEAR HISTORY ------------------
 document.getElementById('clearHistory')?.addEventListener('click', async () => {
   const token = localStorage.getItem('token');
   const role = localStorage.getItem('role');
@@ -142,30 +180,13 @@ document.getElementById('clearHistory')?.addEventListener('click', async () => {
 
   const data = await res.json();
   alert(data.message || data.error);
-
-  // Refresh history after clearing
   fetchHistory();
 });
 
-// ✅ VIEW HISTORY
-function viewHistory() {
-  const historyDiv = document.getElementById('history');
-  if (historyDiv.style.display === 'none') {
-    fetchHistory(); // always load when showing
-  } else {
-    historyDiv.style.display = 'none';
-  }
-}
-
-// ✅ REFRESH HISTORY
-function refreshHistory() {
-  fetchHistory();
-}
-
-// ✅ BUTTON EVENTS
+// ------------------ HISTORY BUTTONS ------------------
 document.getElementById('analyzeBtn')?.addEventListener('click', analyzeHeader);
-document.getElementById('viewBtn')?.addEventListener('click', viewHistory);
-document.getElementById('refreshBtn')?.addEventListener('click', refreshHistory);
+document.getElementById('viewBtn')?.addEventListener('click', fetchHistory);
+document.getElementById('refreshBtn')?.addEventListener('click', fetchHistory);
 
-// Auto load history when page loads
+// Auto load history if element exists
 window.onload = fetchHistory;

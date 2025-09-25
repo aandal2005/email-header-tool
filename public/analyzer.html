@@ -93,54 +93,54 @@
   <footer style="text-align:center; padding:20px; background:#1e293b; color:white;">
     © 2025 Email Header Tool | <a href="https://github.com/yourrepo" style="color:#22c55e;">GitHub</a>
   </footer>
+<script>
+  async function analyzeHeader() {
+    const resultDiv = document.getElementById("result");
+    resultDiv.style.display = "block";
 
-  <script>
-    // Function to extract first IPv4 from header
-    function extractIP(header) {
-      const regex = /(\d{1,3}\.){3}\d{1,3}/;
-      const match = header.match(regex);
-      return match ? match[0] : null;
+    const headerText = document.getElementById("emailHeader").value.trim();
+    if (!headerText) {
+      resultDiv.innerHTML = "<p>Please paste an email header!</p>";
+      return;
     }
 
-    async function analyzeHeader() {
-      const resultDiv = document.getElementById("result");
-      resultDiv.style.display = "block";
+    try {
+      // Call your backend
+      const res = await fetch('https://your-backend-url.onrender.com/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ header: headerText })
+      });
 
-      const headerText = document.getElementById("emailHeader").value.trim();
-      const ip = extractIP(headerText);
+      const data = await res.json();
 
-      let locationHTML = "<p><b>IP Location:</b> Not found</p>";
+      if (data.error) {
+        resultDiv.innerHTML = `<p>Error: ${data.error}</p>`;
+        return;
+      }
 
-      if(ip) {
-        try {
-          const response = await fetch(`https://ipapi.co/${ip}/json/`);
-          const data = await response.json();
-          if(data.error) {
-            locationHTML = `<p><b>IP Location:</b> Could not fetch location</p>`;
-          } else {
-            locationHTML = `
-              <p><b>IP:</b> ${data.ip}</p>
-              <p><b>City:</b> ${data.city}</p>
-              <p><b>Region:</b> ${data.region}</p>
-              <p><b>Country:</b> ${data.country_name}</p>
-              <p><b>ISP:</b> ${data.org}</p>
-            `;
-          }
-        } catch (err) {
-          locationHTML = `<p><b>IP Location:</b> Error fetching location</p>`;
-        }
+      // Update result with badges
+      function badge(status) {
+        if(status === 'pass' || status.includes('Safe')) return 'success';
+        if(status === 'not found' || status.includes('Partial')) return 'warning';
+        return 'danger';
       }
 
       resultDiv.innerHTML = `
         <h3>Result:</h3>
-        <p><b>SPF:</b> <span class="badge success">PASS</span></p>
-        <p><b>DKIM:</b> <span class="badge success">PASS</span></p>
-        <p><b>DMARC:</b> <span class="badge warning">NOT FOUND</span></p>
-        <p><b>Safe Meter:</b> <span class="badge danger">RISK</span></p>
+        <p><b>SPF:</b> <span class="badge ${badge(data.spf)}">${data.spf.toUpperCase()}</span></p>
+        <p><b>DKIM:</b> <span class="badge ${badge(data.dkim)}">${data.dkim.toUpperCase()}</span></p>
+        <p><b>DMARC:</b> <span class="badge ${badge(data.dmarc)}">${data.dmarc.toUpperCase()}</span></p>
+        <p><b>Safe Meter:</b> <span class="badge ${badge(data.safeMeter)}">${data.safeMeter}</span></p>
         <hr>
-        ${locationHTML}
+        <p><b>Sender IP:</b> ${data.senderIP}</p>
+        <p><b>IP Location:</b> ${data.ipLocation}</p>
       `;
+    } catch (err) {
+      resultDiv.innerHTML = `<p>Error fetching results: ${err.message}</p>`;
     }
-  </script>
-</body>
+  }
+</script>
+
+  </body>
 </html>

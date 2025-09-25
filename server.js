@@ -19,9 +19,21 @@ mongoose.connect(MONGO_URI)
   .catch(err => console.error('❌ MongoDB connection error:', err));
 
 // Middleware
+const allowedOrigins = [
+  'https://email-header-frontend.onrender.com', // deployed frontend
+  'http://127.0.0.1:5500',                     // local frontend for testing
+];
+
 app.use(cors({
-  origin: ['http://127.0.0.1:5500', 'https://your-frontend.github.io'], // replace with actual frontend
+  origin: function(origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('CORS not allowed'));
+    }
+  },
   methods: ['GET','POST','DELETE','OPTIONS'],
+  credentials: true
 }));
 app.use(express.json());
 

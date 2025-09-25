@@ -161,109 +161,114 @@ app.post('/login', async (req, res) => {
   }
 });
 
-// Analyze
 app.post('/analyze', async (req, res) => {
-  const headerText = req.body && req.body.header;
-  if (!headerText) return res.status(400).json({ error: 'No header provided' });
-
   try {
+    const header = req.body.header;
+    if (!header) {
+      return res.status(400).json({ error: 'No header provided' });
+    }
+
     const importantKeys = ['From', 'To', 'Subject', 'Date'];
-    const lines = safeSplitLines(headerText);
+    const lines = header.split('\n');
     const result = {};
 
+    // Extract basic header info
     lines.forEach(line => {
-      // only split at first colon to preserve values containing colon
-      const idx = line.indexOf(':');
-      if (idx === -1) return;
-      const key = line.substring(0, idx).trim();
-      const val = line.substring(idx + 1).trim();
-      if (importantKeys.includes(key)) result[key] = val;
+      const [key, ...rest] = line.split(':');
+      if (!key || rest.length === 0) return;
+      const trimmedKey = key.trim();
+      if (importantKeys.includes(trimmedKey)) {
+        result[trimmedKey] = rest.join(':').trim();
+      }
     });
 
-    // SPF / DKIM detection (best-effort)
-    const spfRaw = (headerText.match(/spf=(\w+)/i) || [])[1];
-    const dkimRaw = (headerText.match(/dkim=(\w+)/i) || [])[1];
+    // SPF & DKIM
+    const spfRaw = (header.match(/spf=(\w+)/i) || [])[1];
+    const dkimRaw = (header.match(/dkim=(\w+)/i) || [])[1];
     const spf = spfRaw ? spfRaw.toLowerCase() : 'not found';
     const dkim = dkimRaw ? dkimRaw.toLowerCase() : 'not found';
 
     // DMARC lookup
+    let dmarc = 'not found';
     let fromDomain = null;
     if (result['From']) {
       const match = result['From'].match(/<(.+)>/);
       const fromEmail = match?.[1] || result['From'];
-      const parts = fromEmail.split('@');
-      if (parts.length === 2) fromDomain = parts[1].toLowerCase();
+      fromDomain = fromEmail.split('@')[1];
     }
-    let dmarc = 'not found';
+
     if (fromDomain) {
-      const dmarcRecord = await getDmarcRecord(fromDomain);
-      if (dmarcRecord) dmarc = parseDmarcPolicy(dmarcRecord);
+      try {
+        const dmarcRecord = await getDmarcRecord(fromDomain);
+        if (dmarcRecord) dmarc = parseDmarcPolicy(dmarcRecord);
+      } catch (err) {
+        console.error('DMARC lookup failed:', err.message);
+      }
     }
 
-    result['SPF Status'] = spf;
-    result['DKIM Status'] = dkim;
-    result['DMARC Status'] = dmarc;
-
-    // Safe Meter logic
+    // Safe Meter
     const statuses = [spf, dkim, dmarc];
     const passCount = statuses.filter(v => v === 'pass').length;
     const unknownCount = statuses.filter(v => v === 'not found' || v === 'none').length;
 
-    if (passCount === 3) result['Safe Meter'] = '✅ Safe – All checks passed';
-    else if (passCount >= 2 || (passCount >= 1 && unknownCount > 0)) result['Safe Meter'] = '⚠️ Risk – Partial checks passed';
-    else result['Safe Meter'] = '❌ Unsafe – Failed checks';
+    let safeMeter;
+    if (passCount === 3) safeMeter = '✅ Safe – All checks passed';
+    else if (passCount >= 2 || (passCount >= 1 && unknownCount > 0)) safeMeter = '⚠️ Risk – Partial checks passed';
+    else safeMeter = '❌ Unsafe – Failed checks';
 
-    // Sender IP & geolocation
-    const senderIP = extractSenderIP(headerText);
-    result['Sender IP'] = senderIP || 'Not found';
+    // Sender IP
+    const senderIP = extractSenderIP(header);
+    let ipLocation = 'N/A';
     if (senderIP) {
       try {
-        const geo = await fetch(`http://ip-api.com/json/${senderIP}`);
+        const geo = await fetch(`https://ip-api.com/json/${senderIP}`);
         const loc = await geo.json();
-        result['IP Location'] = loc.status === 'success' ? `${loc.city}, ${loc.regionName}, ${loc.country}` : '❌ Lookup failed';
+        ipLocation = loc.status === 'success' ? `${loc.city}, ${loc.regionName}, ${loc.country}` : '❌ Lookup failed';
       } catch (err) {
-        result['IP Location'] = '❌ Lookup failed';
+        console.error('Geo lookup failed:', err.message);
+        ipLocation = '❌ Lookup failed';
       }
-    } else {
-      result['IP Location'] = 'N/A';
     }
 
-    // Save to DB (fire-and-forget safe)
+    // Save to DB safely
     try {
       await Header.create({
-        from: result['From'],
-        to: result['To'],
-        subject: result['Subject'],
-        date: result['Date'],
-        spf: result['SPF Status'],
-        dkim: result['DKIM Status'],
-        dmarc: result['DMARC Status'],
-        safeMeter: result['Safe Meter'],
-        senderIP: result['Sender IP'],
-        ipLocation: result['IP Location']
+        from: result['From'] || 'Not found',
+        to: result['To'] || 'Not found',
+        subject: result['Subject'] || 'Not found',
+        date: result['Date'] || 'Not found',
+        spf,
+        dkim,
+        dmarc,
+        safeMeter,
+        senderIP: senderIP || 'Not found',
+        ipLocation
       });
-    } catch (err) {
-      console.error('DB Save Error:', err);
+    } catch (dbErr) {
+      console.error('DB Save Error:', dbErr.message);
     }
 
-    return res.json({
+    // ✅ Always respond
+    res.json({
       from: result['From'] || 'Not found',
       to: result['To'] || 'Not found',
       subject: result['Subject'] || 'Not found',
       date: result['Date'] || 'Not found',
-      spf: result['SPF Status'] || 'not found',
-      dkim: result['DKIM Status'] || 'not found',
-      dmarc: result['DMARC Status'] || 'not found',
-      safeMeter: result['Safe Meter'] || '❌ Unsafe',
-      senderIP: result['Sender IP'] || 'Not found',
-      ipLocation: result['IP Location'] || 'N/A'
+      spf,
+      dkim,
+      dmarc,
+      safeMeter,
+      senderIP: senderIP || 'Not found',
+      ipLocation
     });
   } catch (err) {
-    console.error('Analyze error:', err);
-    return res.status(500).json({ error: 'Server error while analyzing header' });
+    console.error('Analyze Route Error:', err.message);
+    res.status(200).json({
+      error: '❌ Analysis failed, but server is safe',
+      details: err.message
+    });
   }
 });
-
 // History
 app.get('/history', async (req, res) => {
   try {

@@ -161,111 +161,120 @@ app.post('/login', async (req, res) => {
   }
 });
 
+a// ------------------ ANALYZE ROUTE ------------------
 app.post('/analyze', async (req, res) => {
   try {
-    const header = req.body.header;
-    if (!header) {
-      return res.status(400).json({ error: 'No header provided' });
-    }
+    const { header } = req.body;
+    if (!header) return res.status(400).json({ error: 'No header provided' });
 
     const importantKeys = ['From', 'To', 'Subject', 'Date'];
     const lines = header.split('\n');
     const result = {};
 
-    // Extract basic header info
+    // Extract basic info
     lines.forEach(line => {
       const [key, ...rest] = line.split(':');
       if (!key || rest.length === 0) return;
       const trimmedKey = key.trim();
-      if (importantKeys.includes(trimmedKey)) {
-        result[trimmedKey] = rest.join(':').trim();
-      }
+      if (importantKeys.includes(trimmedKey)) result[trimmedKey] = rest.join(':').trim();
     });
 
-    // SPF & DKIM
+    // SPF / DKIM
     const spfRaw = (header.match(/spf=(\w+)/i) || [])[1];
     const dkimRaw = (header.match(/dkim=(\w+)/i) || [])[1];
     const spf = spfRaw ? spfRaw.toLowerCase() : 'not found';
     const dkim = dkimRaw ? dkimRaw.toLowerCase() : 'not found';
 
-    // DMARC lookup
+    // DMARC
     let dmarc = 'not found';
-    let fromDomain = null;
-    if (result['From']) {
-      const match = result['From'].match(/<(.+)>/);
-      const fromEmail = match?.[1] || result['From'];
-      fromDomain = fromEmail.split('@')[1];
+    try {
+      if (result['From']) {
+        const match = result['From'].match(/<(.+)>/);
+        const fromEmail = match?.[1] || result['From'];
+        const fromDomain = fromEmail.split('@')[1];
+        if (fromDomain) {
+          const dmarcRecord = await getDmarcRecord(fromDomain);
+          if (dmarcRecord) dmarc = parseDmarcPolicy(dmarcRecord);
+        }
+      }
+    } catch {
+      dmarc = 'lookup failed';
     }
 
-    if (fromDomain) {
-      try {
-        const dmarcRecord = await getDmarcRecord(fromDomain);
-        if (dmarcRecord) dmarc = parseDmarcPolicy(dmarcRecord);
-      } catch (err) {
-        console.error('DMARC lookup failed:', err.message);
-      }
-    }
+    result['SPF Status'] = spf;
+    result['DKIM Status'] = dkim;
+    result['DMARC Status'] = dmarc;
 
     // Safe Meter
     const statuses = [spf, dkim, dmarc];
     const passCount = statuses.filter(v => v === 'pass').length;
     const unknownCount = statuses.filter(v => v === 'not found' || v === 'none').length;
+    if (passCount === 3) result['Safe Meter'] = '✅ Safe – All checks passed';
+    else if (passCount >= 2 || (passCount >= 1 && unknownCount > 0)) result['Safe Meter'] = '⚠️ Risk – Partial checks passed';
+    else result['Safe Meter'] = '❌ Unsafe – Failed checks';
 
-    let safeMeter;
-    if (passCount === 3) safeMeter = '✅ Safe – All checks passed';
-    else if (passCount >= 2 || (passCount >= 1 && unknownCount > 0)) safeMeter = '⚠️ Risk – Partial checks passed';
-    else safeMeter = '❌ Unsafe – Failed checks';
-
-    // Sender IP
-    const senderIP = extractSenderIP(header);
-    let ipLocation = 'N/A';
-    if (senderIP) {
-      try {
-        const geo = await fetch(`https://ip-api.com/json/${senderIP}`);
+    // Sender IP & geolocation
+    let senderIP = extractSenderIP(header);
+    result['Sender IP'] = senderIP || 'Not found';
+    try {
+      if (senderIP) {
+        const geo = await fetch(`http://ip-api.com/json/${senderIP}`);
         const loc = await geo.json();
-        ipLocation = loc.status === 'success' ? `${loc.city}, ${loc.regionName}, ${loc.country}` : '❌ Lookup failed';
-      } catch (err) {
-        console.error('Geo lookup failed:', err.message);
-        ipLocation = '❌ Lookup failed';
+        result['IP Location'] = loc.status === 'success'
+          ? `${loc.city}, ${loc.regionName}, ${loc.country}`
+          : '❌ Lookup failed';
+      } else {
+        result['IP Location'] = 'N/A';
       }
+    } catch {
+      result['IP Location'] = '❌ Lookup failed';
     }
 
-    // Save to DB safely
+    // Save to DB (ignore errors)
     try {
       await Header.create({
-        from: result['From'] || 'Not found',
-        to: result['To'] || 'Not found',
-        subject: result['Subject'] || 'Not found',
-        date: result['Date'] || 'Not found',
-        spf,
-        dkim,
-        dmarc,
-        safeMeter,
-        senderIP: senderIP || 'Not found',
-        ipLocation
+        from: result['From'],
+        to: result['To'],
+        subject: result['Subject'],
+        date: result['Date'],
+        spf: result['SPF Status'],
+        dkim: result['DKIM Status'],
+        dmarc: result['DMARC Status'],
+        safeMeter: result['Safe Meter'],
+        senderIP: result['Sender IP'],
+        ipLocation: result['IP Location']
       });
     } catch (dbErr) {
       console.error('DB Save Error:', dbErr.message);
     }
 
-    // ✅ Always respond
+    // Always respond safely
     res.json({
-      from: result['From'] || 'Not found',
-      to: result['To'] || 'Not found',
-      subject: result['Subject'] || 'Not found',
-      date: result['Date'] || 'Not found',
-      spf,
-      dkim,
-      dmarc,
-      safeMeter,
-      senderIP: senderIP || 'Not found',
-      ipLocation
+      from: result['From'] || "Not found",
+      to: result['To'] || "Not found",
+      subject: result['Subject'] || "Not found",
+      date: result['Date'] || "Not found",
+      spf: result['SPF Status'],
+      dkim: result['DKIM Status'],
+      dmarc: result['DMARC Status'],
+      safeMeter: result['Safe Meter'],
+      senderIP: result['Sender IP'],
+      ipLocation: result['IP Location']
     });
+
   } catch (err) {
-    console.error('Analyze Route Error:', err.message);
-    res.status(200).json({
-      error: '❌ Analysis failed, but server is safe',
-      details: err.message
+    console.error("Analyze Error:", err.message);
+    res.status(200).json({   // ✅ prevent 500
+      from: "Error",
+      to: "Error",
+      subject: "Error",
+      date: "Error",
+      spf: "error",
+      dkim: "error",
+      dmarc: "error",
+      safeMeter: "❌ Analysis failed",
+      senderIP: "N/A",
+      ipLocation: "N/A"
     });
   }
 });

@@ -1,4 +1,5 @@
-const BACKEND_URL = "https://email-header-backend.onrender.com";
+// ------------------ CONFIG ------------------
+const BACKEND_URL = "https://email-header-backend.onrender.com"; // replace with your deployed backend
 
 // ------------------ LOGIN + REGISTER ------------------
 let isSignup = false;
@@ -42,27 +43,24 @@ submitBtn.addEventListener('click', async () => {
       body: JSON.stringify(isSignup ? { name, email, password } : { email, password })
     });
 
-    if (res.status === 404) {
-      throw new Error(`Endpoint not found: ${endpoint}`);
-    }
-
     const data = await res.json();
 
     if (!res.ok) {
       message.className = 'error';
       message.textContent = `❌ ${data.error || "Something went wrong"}`;
-    } else {
-      message.className = 'success';
-      message.textContent = data.message || "✅ Success";
+      return;
+    }
 
-      if (!isSignup && data.token) {
-        localStorage.setItem("token", data.token);
-        localStorage.setItem("role", data.role);
+    message.className = 'success';
+    message.textContent = data.message || "✅ Success";
 
-        if (data.role === "admin") adminPanelLink.style.display = "block";
+    if (!isSignup && data.token) {
+      localStorage.setItem("token", data.token);
+      localStorage.setItem("role", data.role);
 
-        setTimeout(() => window.location.href = 'analyzer.html', 1200);
-      }
+      if (data.role === "admin") adminPanelLink.style.display = "block";
+
+      setTimeout(() => window.location.href = 'analyzer.html', 1200);
     }
   } catch (err) {
     console.error("❌ Login/Register error:", err);
@@ -79,13 +77,23 @@ async function analyzeHeader() {
     return;
   }
 
+  const token = localStorage.getItem('token');
+  if (!token) {
+    alert('Please login first');
+    return;
+  }
+
   try {
     const res = await fetch(`${BACKEND_URL}/analyze`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
       body: JSON.stringify({ header })
     });
 
+    if (res.status === 401) throw new Error("Unauthorized – Please login again");
     if (res.status === 404) throw new Error('/analyze endpoint not found');
 
     const data = await res.json();
@@ -114,8 +122,15 @@ async function analyzeHeader() {
 
 // ------------------ FETCH HISTORY ------------------
 async function fetchHistory() {
+  const token = localStorage.getItem('token');
+  if (!token) return;
+
   try {
-    const res = await fetch(`${BACKEND_URL}/history`);
+    const res = await fetch(`${BACKEND_URL}/history`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+
+    if (res.status === 401) throw new Error("Unauthorized – Please login again");
     if (res.status === 404) throw new Error('/history endpoint not found');
 
     const history = await res.json();
@@ -178,9 +193,10 @@ document.getElementById('clearHistory')?.addEventListener('click', async () => {
   try {
     const res = await fetch(`${BACKEND_URL}/history`, {
       method: 'DELETE',
-      headers: { 'Authorization': token }
+      headers: { 'Authorization': `Bearer ${token}` }
     });
 
+    if (res.status === 401) throw new Error("Unauthorized – Please login again");
     if (res.status === 404) throw new Error('/history DELETE endpoint not found');
 
     const data = await res.json();
@@ -192,7 +208,7 @@ document.getElementById('clearHistory')?.addEventListener('click', async () => {
   }
 });
 
-// ------------------ HISTORY BUTTONS ------------------
+// ------------------ BUTTON EVENTS ------------------
 document.getElementById('analyzeBtn')?.addEventListener('click', analyzeHeader);
 document.getElementById('viewBtn')?.addEventListener('click', fetchHistory);
 document.getElementById('refreshBtn')?.addEventListener('click', fetchHistory);

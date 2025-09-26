@@ -9,22 +9,15 @@ const jwt = require("jsonwebtoken");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-const JWT_SECRET = "YourJWTSecretKey123!"; // Hardcoded for simplicity
+const JWT_SECRET = "YourJWTSecretKey123!";
 
 // ---------------- MIDDLEWARE ----------------
 app.use(express.json());
-
 app.use(cors({
-  origin: [
-    "https://email-header-frontend.onrender.com",
-    "http://127.0.0.1:5500",
-    "http://localhost:3000"
-  ],
-  methods: ['GET','POST','DELETE','OPTIONS'],
-  allowedHeaders: ['Content-Type','Authorization'],
-  credentials: true
+  origin: ['https://email-header-frontend.onrender.com'],
+  methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
-
 app.options('*', cors());
 
 // ---------------- DATABASE ----------------
@@ -66,21 +59,6 @@ function extractSenderIP(header) {
     if (match) return match[1];
   }
   return null;
-}
-
-async function getDmarcRecord(domain) {
-  try {
-    const records = await dns.resolveTxt(`_dmarc.${domain}`);
-    return records.flat().join(" ");
-  } catch {
-    return null;
-  }
-}
-
-function parseDmarcPolicy(record) {
-  if (!record) return "not found";
-  const match = record.match(/p=([a-zA-Z]+)/);
-  return match ? match[1].toLowerCase() : "none";
 }
 
 // ---------------- AUTH MIDDLEWARE ----------------
@@ -148,7 +126,6 @@ app.post("/analyze", async (req, res) => {
     const lines = header.split("\n");
     const result = {};
 
-    // Extract important header values
     lines.forEach(line => {
       const [key, ...rest] = line.split(":");
       if (!key || rest.length === 0) return;
@@ -158,7 +135,6 @@ app.post("/analyze", async (req, res) => {
       }
     });
 
-    // SPF, DKIM, DMARC
     const spf = (header.match(/spf=(\w+)/i)?.[1] || "not found").toLowerCase();
     const dkim = (header.match(/dkim=(\w+)/i)?.[1] || "not found").toLowerCase();
     const dmarc = (header.match(/dmarc=(\w+)/i)?.[1] || "not found").toLowerCase();
@@ -167,16 +143,14 @@ app.post("/analyze", async (req, res) => {
     result["DKIM Status"] = dkim;
     result["DMARC Status"] = dmarc;
 
-    // Safe Meter
     const passCount = [spf, dkim, dmarc].filter(v => v === "pass").length;
-    result["Safe Meter"] =
-      passCount === 3
-        ? "✅ Safe – All checks passed"
-        : passCount >= 2
-        ? "⚠️ Risk – Partial checks passed"
-        : "❌ Unsafe – Failed checks";
+    result["Safe Meter"] = passCount === 3
+      ? "✅ Safe – All checks passed"
+      : passCount >= 2
+      ? "⚠️ Risk – Partial checks passed"
+      : "❌ Unsafe – Failed checks";
 
-    // ---------- Sender IP & Geo using geoip-lite ----------
+    // Sender IP extraction & Geo
     const receivedLines = header.split("\n").filter(l => l.toLowerCase().startsWith("received:"));
     let senderIP = "Not found";
     let ipLocation = "Unknown";
@@ -185,12 +159,13 @@ app.post("/analyze", async (req, res) => {
       const match = receivedLines[i].match(/\[([0-9.]+)\]/);
       if (match) {
         senderIP = match[1];
-
-        // geoip-lite lookup
-        const geo = geoip.lookup(senderIP);
-        if (geo) {
-          ipLocation = `${geo.city || 'Unknown'}, ${geo.region || 'Unknown'}, ${geo.country || 'Unknown'}`;
-        } else {
+        try {
+          const geoRes = await fetch(`http://ip-api.com/json/${senderIP}`);
+          const geoData = await geoRes.json();
+          if (geoData.status === "success") {
+            ipLocation = `${geoData.city || 'Unknown'}, ${geoData.regionName || 'Unknown'}, ${geoData.country || 'Unknown'}`;
+          }
+        } catch {
           ipLocation = "Lookup failed";
         }
         break;
@@ -200,7 +175,6 @@ app.post("/analyze", async (req, res) => {
     result["Sender IP"] = senderIP;
     result["IP Location"] = ipLocation;
 
-    // Save to DB
     await Header.create({
       from: result["From"] || "Not found",
       to: result["To"] || "Not found",
@@ -215,7 +189,6 @@ app.post("/analyze", async (req, res) => {
     });
 
     res.json(result);
-
   } catch (err) {
     console.error("Analyze error:", err);
     res.status(500).json({ error: "Analysis failed", details: err.message });
@@ -236,7 +209,6 @@ app.get("/history", authenticateToken, async (req, res) => {
 // --------- CLEAR HISTORY (Admin only) ---------
 app.delete("/history", authenticateToken, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: "Admins only" });
-
   try {
     await Header.deleteMany({});
     res.json({ message: "✅ History cleared" });

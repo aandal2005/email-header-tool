@@ -1,0 +1,25 @@
+{
+  "name": "email-header-backend",
+  "version": "1.0.0",
+  "description": "Email Header Analyzer backend with IP geolocation",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "dependencies": {
+    "bcrypt": "^5.1.0",
+    "cors": "^2.8.5",
+    "dns": "^0.2.2",
+    "express": "^4.18.2",
+    "geoip-lite": "^1.4.2",
+    "jsonwebtoken": "^9.0.0",
+    "mongoose": "^7.6.0",
+    "node-fetch": "^3.4.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  },
+  "author": "Aandal",
+  "license": "ISC"
+}

@@ -150,33 +150,33 @@ app.post("/analyze", async (req, res) => {
       ? "⚠️ Risk – Partial checks passed"
       : "❌ Unsafe – Failed checks";
 
-    // Sender IP extraction & Geo
-    const receivedLines = header.split("\n").filter(l => l.toLowerCase().startsWith("received:"));
-    let senderIP = extractSenderIP(header) || "Not found";
-    let ipLocation = "Unknown";
+  // Sender IP extraction & Geo using IPinfo Lite
+const receivedLines = header.split("\n").filter(l => l.toLowerCase().startsWith("received:"));
+let senderIP = "Not found";
+let ipLocation = "Unknown";
 
-    for (let i = receivedLines.length - 1; i >= 0; i--) {
-      const match = receivedLines[i].match(/\[([0-9.]+)\]/);
-      if (match) {
-        senderIP = match[1];
-        try {
-          const geoRes = await fetch(`https://ipwhois.app/json/${senderIP}`);
-const geoData = await geoRes.json();
-if (geoData.success) {
-  ipLocation = `${geoData.city || 'Unknown'}, ${geoData.region || 'Unknown'}, ${geoData.country || 'Unknown'}`;
-} else {
-  ipLocation = "Lookup failed";
+for (let i = receivedLines.length - 1; i >= 0; i--) {
+  const match = receivedLines[i].match(/\[([0-9.]+)\]/);
+  if (match) {
+    senderIP = match[1];
+    try {
+      const geoRes = await fetch(`https://ipinfo.io/${senderIP}/json`);
+      const geoData = await geoRes.json();
+
+      // IPinfo Lite provides "city", "region", "country"
+      ipLocation = `${geoData.city || 'Unknown'}, ${geoData.region || 'Unknown'}, ${geoData.country || 'Unknown'}`;
+
+    } catch (err) {
+      ipLocation = "Lookup failed";
+      console.error("IPinfo Lite error:", err.message);
+    }
+    break;
+  }
 }
 
-        } catch {
-          ipLocation = "Lookup failed";
-        }
-        break;
-      }
-    }
+result["Sender IP"] = senderIP;
+result["IP Location"] = ipLocation;
 
-    result["Sender IP"] = senderIP;
-    result["IP Location"] = ipLocation;
 
     await Header.create({
       from: result["From"] || "Not found",

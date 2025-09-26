@@ -137,11 +137,12 @@ app.post("/login", async (req, res) => {
 
 // --------- ANALYZE HEADER ---------
 app.post("/analyze", async (req, res) => {
+app.post("/analyze", async (req, res) => {
   try {
     const { header } = req.body;
     if (!header) return res.status(400).json({ error: "No header provided" });
 
-    // ---------------- Extract Basic Header Info ----------------
+    // ---------------- Extract basic headers ----------------
     const importantKeys = ["From", "To", "Subject", "Date"];
     const lines = header.split("\n");
     const result = {};
@@ -155,14 +156,13 @@ app.post("/analyze", async (req, res) => {
       }
     });
 
-    // ---------------- Extract SPF and DKIM ----------------
+    // ---------------- SPF / DKIM ----------------
     const spf = (header.match(/spf=(\w+)/i)?.[1] || "not found").toLowerCase();
     const dkim = (header.match(/dkim=(\w+)/i)?.[1] || "not found").toLowerCase();
-
     result["SPF Status"] = spf;
     result["DKIM Status"] = dkim;
 
-    // ---------------- Extract Sender IP ----------------
+    // ---------------- Sender IP ----------------
     const receivedLines = header.split("\n").filter(l => l.toLowerCase().startsWith("received:"));
     let senderIP = "Not found";
     for (let i = receivedLines.length - 1; i >= 0; i--) {
@@ -223,19 +223,19 @@ app.post("/analyze", async (req, res) => {
       to: result["To"] || "Not found",
       subject: result["Subject"] || "Not found",
       date: result["Date"] || "Not found",
-      spf: result["SPF Status"],
-      dkim: result["DKIM Status"],
-      dmarc: result["DMARC Status"],
+      spf,
+      dkim,
+      dmarc,
       safeMeter: result["Safe Meter"],
-      senderIP: result["Sender IP"],
-      ipLocation: result["IP Location"],
+      senderIP,
+      ipLocation,
     });
 
     // ---------------- Send Response ----------------
     res.json(result);
 
   } catch (err) {
-    console.error("Analyze error:", err);
+    console.error("Analyze route error:", err);
     res.status(500).json({ error: "Analysis failed", details: err.message });
   }
 });

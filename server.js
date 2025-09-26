@@ -14,7 +14,6 @@ const JWT_SECRET = "YourJWTSecretKey123!"; // Hardcoded for simplicity
 // ---------------- MIDDLEWARE ----------------
 app.use(express.json());
 
-// CORS: allow your frontend
 app.use(cors({
   origin: [
     "https://email-header-frontend.onrender.com",
@@ -23,11 +22,11 @@ app.use(cors({
   ],
   methods: ['GET','POST','DELETE','OPTIONS'],
   allowedHeaders: ['Content-Type','Authorization'],
-  credentials: true // optional if you use cookies/auth
+  credentials: true
 }));
 
-// Handle OPTIONS preflight requests for all routes
 app.options('*', cors());
+
 // ---------------- DATABASE ----------------
 const MONGO_URI = "mongodb+srv://aandal:aandal2005@emailheadercluster.e2ir8k8.mongodb.net/?retryWrites=true&w=majority&appName=EmailHeaderCluster";
 
@@ -40,7 +39,7 @@ const userSchema = new mongoose.Schema({
   name: String,
   email: { type: String, unique: true },
   password: String,
-  role: { type: String, default: "user" } // user or admin
+  role: { type: String, default: "user" }
 });
 
 const headerSchema = new mongoose.Schema({
@@ -61,7 +60,6 @@ const Header = mongoose.model("Header", headerSchema);
 
 // ---------------- HELPERS ----------------
 function extractSenderIP(header) {
-  // Scan Received: headers from bottom to top
   const receivedLines = header.split("\n").filter(l => l.toLowerCase().startsWith("received:"));
   for (let i = receivedLines.length - 1; i >= 0; i--) {
     const match = receivedLines[i].match(/\[([0-9.]+)\]/);
@@ -87,7 +85,7 @@ function parseDmarcPolicy(record) {
 
 // ---------------- AUTH MIDDLEWARE ----------------
 function authenticateToken(req, res, next) {
-  const token = req.headers['authorization'];
+  const token = req.headers['authorization']?.split(' ')[1];
   if (!token) return res.status(401).json({ error: "No token provided" });
 
   jwt.verify(token, JWT_SECRET, (err, user) => {
@@ -146,12 +144,10 @@ app.post("/analyze", async (req, res) => {
     const { header } = req.body;
     if (!header) return res.status(400).json({ error: "No header provided" });
 
-    // Important keys for parsing
     const importantKeys = ["From", "To", "Subject", "Date"];
     const lines = header.split("\n");
     const result = {};
 
-    // Extract header values
     lines.forEach(line => {
       const [key, ...rest] = line.split(":");
       if (!key || rest.length === 0) return;
@@ -161,7 +157,6 @@ app.post("/analyze", async (req, res) => {
       }
     });
 
-    // Extract SPF, DKIM, DMARC safely
     const spf = (header.match(/spf=(\w+)/i)?.[1] || "not found").toLowerCase();
     const dkim = (header.match(/dkim=(\w+)/i)?.[1] || "not found").toLowerCase();
     const dmarc = (header.match(/dmarc=(\w+)/i)?.[1] || "not found").toLowerCase();
@@ -170,7 +165,6 @@ app.post("/analyze", async (req, res) => {
     result["DKIM Status"] = dkim;
     result["DMARC Status"] = dmarc;
 
-    // Safe Meter
     const passCount = [spf, dkim, dmarc].filter(v => v === "pass").length;
     result["Safe Meter"] =
       passCount === 3
@@ -179,28 +173,40 @@ app.post("/analyze", async (req, res) => {
         ? "⚠️ Risk – Partial checks passed"
         : "❌ Unsafe – Failed checks";
 
-    // Sender IP extraction
+    // ---------- Sender IP & Geo ----------
     const receivedLines = header.split("\n").filter(l => l.toLowerCase().startsWith("received:"));
     let senderIP = "Not found";
     let ipLocation = "Unknown";
+
+    const isPrivateIP = (ip) => /^(10\.|127\.|172\.(1[6-9]|2\d|3[0-1])\.|192\.168\.)/.test(ip);
 
     for (let i = receivedLines.length - 1; i >= 0; i--) {
       const match = receivedLines[i].match(/\[([0-9.]+)\]/);
       if (match) {
         senderIP = match[1];
-       
-try {
-  const geoRes = await fetch(`https://ip-api.com/json/${senderIP}?fields=status,country,regionName,city`);
-  const geoData = await geoRes.json();
-  if (geoData.status === "success") {
-    ipLocation = `${geoData.city || 'Unknown'}, ${geoData.regionName || 'Unknown'}, ${geoData.country || 'Unknown'}`;
-  } else {
-    ipLocation = "Lookup failed";
-  }
-} catch {
-  ipLocation = "Lookup failed";
-}
 
+        if (!isPrivateIP(senderIP)) {
+          try {
+            // Primary API
+            const geoRes = await fetch(`https://ipwhois.app/json/${senderIP}`);
+            const geoData = await geoRes.json();
+            if (geoData && (geoData.success === true || geoData.success === undefined)) {
+              ipLocation = `${geoData.city || 'Unknown'}, ${geoData.region || 'Unknown'}, ${geoData.country || 'Unknown'}`;
+            } else {
+              // Fallback
+              const fbRes = await fetch(`https://ip-api.com/json/${senderIP}?fields=status,city,regionName,country,message`);
+              const fb = await fbRes.json();
+              ipLocation = fb.status === 'success'
+                ? `${fb.city || 'Unknown'}, ${fb.regionName || 'Unknown'}, ${fb.country || 'Unknown'}`
+                : `Lookup failed (${fb?.message || 'no data'})`;
+            }
+          } catch (err) {
+            console.error("IP lookup error:", err);
+            ipLocation = "Lookup failed";
+          }
+        } else {
+          ipLocation = "Private / local IP";
+        }
         break;
       }
     }
@@ -208,7 +214,6 @@ try {
     result["Sender IP"] = senderIP;
     result["IP Location"] = ipLocation;
 
-    // Save to DB
     await Header.create({
       from: result["From"] || "Not found",
       to: result["To"] || "Not found",

@@ -5,32 +5,29 @@ const mongoose = require("mongoose");
 const cors = require("cors");
 const dns = require("dns").promises;
 const fetch = require("node-fetch"); // npm install node-fetch
+const bcrypt = require("bcrypt"); // npm install bcrypt
+const jwt = require("jsonwebtoken"); // npm install jsonwebtoken
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = 5000; // fixed port, change if needed
+const JWT_SECRET = "your_jwt_secret_key"; // for demo; change in production
 
 // ---------------- MIDDLEWARE ----------------
 app.use(express.json());
-app.use(
-  cors({
-    origin: [
-      "http://127.0.0.1:5500", // local frontend
-      "https://your-frontend.github.io", // replace with actual frontend
-    ],
-    methods: ["GET", "POST", "OPTIONS"],
-  })
-);
+app.use(cors()); // allow all origins, safe for testing
 
 // ---------------- DATABASE ----------------
-const MONGO_URI = process.env.MONGO_URI || "mongodb+srv://aandal:aandal2005@emailheadercluster.e2ir8k8.mongodb.net/?retryWrites=true&w=majority&appName=EmailHeaderCluster";
+const MONGO_URI =
+  "mongodb+srv://aandal:aandal2005@emailheadercluster.e2ir8k8.mongodb.net/?retryWrites=true&w=majority&appName=EmailHeaderCluster";
 
 mongoose
   .connect(MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true })
   .then(() => console.log("✅ MongoDB connected successfully"))
   .catch((err) => console.error("❌ MongoDB connection error:", err));
 
-// ---------------- SCHEMA ----------------
+// ---------------- SCHEMAS ----------------
 const headerSchema = new mongoose.Schema({
+  userId: String,
   from: String,
   to: String,
   subject: String,
@@ -43,7 +40,15 @@ const headerSchema = new mongoose.Schema({
   ipLocation: String,
 });
 
+const userSchema = new mongoose.Schema({
+  name: String,
+  email: String,
+  password: String, // hashed
+  role: { type: String, default: "user" }, // user/admin
+});
+
 const Header = mongoose.model("Header", headerSchema);
+const User = mongoose.model("User", userSchema);
 
 // ---------------- HELPERS ----------------
 function extractSenderIP(header) {
@@ -66,12 +71,64 @@ function parseDmarcPolicy(record) {
   return match ? match[1].toLowerCase() : "none";
 }
 
+function authenticateToken(req, res, next) {
+  const authHeader = req.headers["authorization"];
+  const token = authHeader && authHeader.split(" ")[1];
+  if (!token) return res.status(401).json({ error: "Unauthorized" });
+
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err) return res.status(403).json({ error: "Forbidden" });
+    req.user = user;
+    next();
+  });
+}
+
 // ---------------- ROUTES ----------------
+
+// Home
 app.get("/", (req, res) => {
   res.send("✅ Email Header Analyzer API is running");
 });
 
-app.post("/analyze", async (req, res) => {
+// Register
+app.post("/register", async (req, res) => {
+  const { name, email, password } = req.body;
+  if (!name || !email || !password)
+    return res.status(400).json({ error: "All fields are required" });
+
+  const existing = await User.findOne({ email });
+  if (existing) return res.status(400).json({ error: "User already exists" });
+
+  const hashed = await bcrypt.hash(password, 10);
+  const user = await User.create({ name, email, password: hashed });
+  const token = jwt.sign({ id: user._id, role: user.role }, JWT_SECRET, {
+    expiresIn: "7d",
+  });
+
+  res.json({ message: "User registered", token });
+});
+
+// Login
+app.post("/login", async (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password)
+    return res.status(400).json({ error: "All fields are required" });
+
+  const user = await User.findOne({ email });
+  if (!user) return res.status(400).json({ error: "Invalid credentials" });
+
+  const valid = await bcrypt.compare(password, user.password);
+  if (!valid) return res.status(400).json({ error: "Invalid credentials" });
+
+  const token = jwt.sign({ id: user._id, role: user.role }, JWT_SECRET, {
+    expiresIn: "7d",
+  });
+
+  res.json({ message: "Login successful", token });
+});
+
+// Analyze Email Header
+app.post("/analyze", authenticateToken, async (req, res) => {
   try {
     const { header } = req.body;
     if (!header) return res.status(400).json({ error: "No header provided" });
@@ -145,6 +202,7 @@ app.post("/analyze", async (req, res) => {
     // Save to DB
     try {
       await Header.create({
+        userId: req.user.id,
         from: result["From"],
         to: result["To"],
         subject: result["Subject"],
@@ -160,33 +218,22 @@ app.post("/analyze", async (req, res) => {
       console.error("DB Save Error:", dbErr.message);
     }
 
-    // Respond
-    res.json({
-      from: result["From"] || "Not found",
-      to: result["To"] || "Not found",
-      subject: result["Subject"] || "Not found",
-      date: result["Date"] || "Not found",
-      spf: result["SPF Status"],
-      dkim: result["DKIM Status"],
-      dmarc: result["DMARC Status"],
-      safeMeter: result["Safe Meter"],
-      senderIP: result["Sender IP"],
-      ipLocation: result["IP Location"],
-    });
+    res.json(result);
   } catch (err) {
     console.error("Analyze Error:", err.message);
     res.status(500).json({
-      from: "Error",
-      to: "Error",
-      subject: "Error",
-      date: "Error",
-      spf: "error",
-      dkim: "error",
-      dmarc: "error",
-      safeMeter: "❌ Analysis failed",
-      senderIP: "N/A",
-      ipLocation: "N/A",
+      error: "Analysis failed",
     });
+  }
+});
+
+// Get History
+app.get("/history", authenticateToken, async (req, res) => {
+  try {
+    const headers = await Header.find({ userId: req.user.id }).sort({ _id: -1 });
+    res.json(headers);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch history" });
   }
 });
 

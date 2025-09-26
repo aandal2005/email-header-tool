@@ -1,5 +1,5 @@
 // ------------------ CONFIG ------------------
-const BACKEND_URL = "https://email-header-backend.onrender.com"; // replace with your deployed backend
+const BACKEND_URL = "https://email-header-backend.onrender.com"; // your deployed backend
 
 // ------------------ LOGIN + REGISTER ------------------
 let isSignup = false;
@@ -13,6 +13,7 @@ const message = document.getElementById('message');
 const adminPanelLink = document.getElementById('adminPanelLink');
 
 function toggleForm() {
+  if (!nameInput) return; // only on login page
   isSignup = !isSignup;
   nameInput.style.display = isSignup ? 'block' : 'none';
   formTitle.textContent = isSignup ? 'Sign Up' : 'Login';
@@ -23,51 +24,53 @@ function toggleForm() {
   message.className = '';
 }
 
-submitBtn.addEventListener('click', async () => {
-  const email = emailInput.value.trim();
-  const password = passwordInput.value.trim();
-  const name = nameInput.value.trim();
+if (submitBtn) {
+  submitBtn.addEventListener('click', async () => {
+    const email = emailInput.value.trim();
+    const password = passwordInput.value.trim();
+    const name = nameInput?.value.trim();
 
-  if (!email || !password || (isSignup && !name)) {
-    message.className = 'error';
-    message.textContent = '❌ All fields are required';
-    return;
-  }
-
-  const endpoint = isSignup ? "/register" : "/login";
-
-  try {
-    const res = await fetch(`${BACKEND_URL}${endpoint}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(isSignup ? { name, email, password } : { email, password })
-    });
-
-    const data = await res.json();
-
-    if (!res.ok) {
+    if (!email || !password || (isSignup && !name)) {
       message.className = 'error';
-      message.textContent = `❌ ${data.error || "Something went wrong"}`;
+      message.textContent = '❌ All fields are required';
       return;
     }
 
-    message.className = 'success';
-    message.textContent = data.message || "✅ Success";
+    const endpoint = isSignup ? "/register" : "/login";
 
-    if (!isSignup && data.token) {
-      localStorage.setItem("token", data.token);
-      localStorage.setItem("role", data.role);
+    try {
+      const res = await fetch(`${BACKEND_URL}${endpoint}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(isSignup ? { name, email, password } : { email, password })
+      });
 
-      if (data.role === "admin") adminPanelLink.style.display = "block";
+      const data = await res.json();
 
-      setTimeout(() => window.location.href = 'analyzer.html', 1200);
+      if (!res.ok) {
+        message.className = 'error';
+        message.textContent = `❌ ${data.error || "Something went wrong"}`;
+        return;
+      }
+
+      message.className = 'success';
+      message.textContent = data.message || "✅ Success";
+
+      if (!isSignup && data.token) {
+        localStorage.setItem("token", data.token);
+        localStorage.setItem("role", data.role);
+
+        if (data.role === "admin" && adminPanelLink) adminPanelLink.style.display = "block";
+
+        setTimeout(() => window.location.href = 'analyzer.html', 1200);
+      }
+    } catch (err) {
+      console.error("❌ Login/Register error:", err);
+      message.className = 'error';
+      message.textContent = `❌ ${err.message}`;
     }
-  } catch (err) {
-    console.error("❌ Login/Register error:", err);
-    message.className = 'error';
-    message.textContent = `❌ ${err.message}`;
-  }
-});
+  });
+}
 
 // ------------------ ANALYZE HEADER ------------------
 async function analyzeHeader() {
@@ -99,6 +102,7 @@ async function analyzeHeader() {
     const data = await res.json();
 
     const resultDiv = document.getElementById('result');
+    resultDiv.style.display = "block";
     resultDiv.innerHTML = `
       <table border="1" style="border-collapse: collapse; margin-top: 10px; width: 100%;">
         <tr><th>From</th><td>${data.from}</td></tr>

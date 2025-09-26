@@ -157,17 +157,22 @@ let senderIP = "Not found";
 let ipLocation = "Unknown";
 
 const apiKey = process.env.IP_GEO_API_KEY;
+   for (let i = receivedLines.length - 1; i >= 0; i--) {
+  const match = receivedLines[i].match(/\[([0-9.]+)\]/);
+  if (match) {
+    senderIP = match[1];
     try {
       const geoRes = await fetch(`https://ipinfo.io/${senderIP}?token=${apiKey}`);
       const geoData = await geoRes.json();
-
       if (geoData.city) {
         ipLocation = `${geoData.city}, ${geoData.region}, ${geoData.country}`;
+      } else {
+        ipLocation = "Lookup failed";
       }
-    } catch (err) {
+    } catch {
       ipLocation = "Lookup failed";
-      console.error("IP Geo error:", err);
-    }    break;
+    }
+    break; // ✅ Correct: inside the loop
   }
 }
 

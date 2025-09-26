@@ -188,15 +188,20 @@ app.post("/analyze", async (req, res) => {
       const match = receivedLines[i].match(/\[([0-9.]+)\]/);
       if (match) {
         senderIP = match[1];
-        try {
-          const geoRes = await fetch(`http://ip-api.com/json/${senderIP}`);
-          const geoData = await geoRes.json();
-          if (geoData.status === "success") {
-            ipLocation = `${geoData.city}, ${geoData.regionName}, ${geoData.country}`;
-          }
-        } catch {
-          ipLocation = "Lookup failed";
-        }
+       try {
+  // Use HTTPS for ip-api
+  const geoRes = await fetch(`https://ip-api.com/json/${senderIP}`);
+  const geoData = await geoRes.json();
+  if (geoData.status === "success") {
+    ipLocation = `${geoData.city || "N/A"}, ${geoData.regionName || "N/A"}, ${geoData.country || "N/A"}`;
+  } else {
+    ipLocation = `Lookup failed (${geoData.message || "unknown"})`;
+  }
+} catch (err) {
+  console.error("IP lookup error:", err);
+  ipLocation = "Lookup failed";
+}
+
         break;
       }
     }

@@ -174,66 +174,14 @@ app.post("/analyze", async (req, res) => {
         : "❌ Unsafe – Failed checks";
 
     // ---------- Sender IP & Geo ----------
-    const receivedLines = header.split("\n").filter(l => l.toLowerCase().startsWith("received:"));
-    let senderIP = "Not found";
-    let ipLocation = "Unknown";
+   const geoRes = await fetch(`https://ipwhois.app/json/${senderIP}?objects=city,region,country`);
+const geoData = await geoRes.json();
+if (geoData.success !== false) {
+  ipLocation = `${geoData.city || 'Unknown'}, ${geoData.region || 'Unknown'}, ${geoData.country || 'Unknown'}`;
+} else {
+  ipLocation = "Lookup failed";
+}
 
-    const isPrivateIP = (ip) => /^(10\.|127\.|172\.(1[6-9]|2\d|3[0-1])\.|192\.168\.)/.test(ip);
-
-    for (let i = receivedLines.length - 1; i >= 0; i--) {
-      const match = receivedLines[i].match(/\[([0-9.]+)\]/);
-      if (match) {
-        senderIP = match[1];
-
-        if (!isPrivateIP(senderIP)) {
-          try {
-            // Primary API
-            const geoRes = await fetch(`https://ipwhois.app/json/${senderIP}`);
-            const geoData = await geoRes.json();
-            if (geoData && (geoData.success === true || geoData.success === undefined)) {
-              ipLocation = `${geoData.city || 'Unknown'}, ${geoData.region || 'Unknown'}, ${geoData.country || 'Unknown'}`;
-            } else {
-              // Fallback
-              const fbRes = await fetch(`https://ip-api.com/json/${senderIP}?fields=status,city,regionName,country,message`);
-              const fb = await fbRes.json();
-              ipLocation = fb.status === 'success'
-                ? `${fb.city || 'Unknown'}, ${fb.regionName || 'Unknown'}, ${fb.country || 'Unknown'}`
-                : `Lookup failed (${fb?.message || 'no data'})`;
-            }
-          } catch (err) {
-            console.error("IP lookup error:", err);
-            ipLocation = "Lookup failed";
-          }
-        } else {
-          ipLocation = "Private / local IP";
-        }
-        break;
-      }
-    }
-
-    result["Sender IP"] = senderIP;
-    result["IP Location"] = ipLocation;
-
-    await Header.create({
-      from: result["From"] || "Not found",
-      to: result["To"] || "Not found",
-      subject: result["Subject"] || "Not found",
-      date: result["Date"] || "Not found",
-      spf,
-      dkim,
-      dmarc,
-      safeMeter: result["Safe Meter"],
-      senderIP,
-      ipLocation,
-    });
-
-    res.json(result);
-
-  } catch (err) {
-    console.error("Analyze error:", err);
-    res.status(500).json({ error: "Analysis failed", details: err.message });
-  }
-});
 
 // --------- FETCH HISTORY ---------
 app.get("/history", authenticateToken, async (req, res) => {

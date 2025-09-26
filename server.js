@@ -152,7 +152,7 @@ app.post("/analyze", async (req, res) => {
 
     // Sender IP extraction & Geo
     const receivedLines = header.split("\n").filter(l => l.toLowerCase().startsWith("received:"));
-    let senderIP = "Not found";
+    let senderIP = extractSenderIP(header) || "Not found";
     let ipLocation = "Unknown";
 
     for (let i = receivedLines.length - 1; i >= 0; i--) {
@@ -160,11 +160,14 @@ app.post("/analyze", async (req, res) => {
       if (match) {
         senderIP = match[1];
         try {
-          const geoRes = await fetch(`http://ip-api.com/json/${senderIP}`);
-          const geoData = await geoRes.json();
-          if (geoData.status === "success") {
-            ipLocation = `${geoData.city || 'Unknown'}, ${geoData.regionName || 'Unknown'}, ${geoData.country || 'Unknown'}`;
-          }
+          const geoRes = await fetch(`https://ipwhois.app/json/${senderIP}`);
+const geoData = await geoRes.json();
+if (geoData.success) {
+  ipLocation = `${geoData.city || 'Unknown'}, ${geoData.region || 'Unknown'}, ${geoData.country || 'Unknown'}`;
+} else {
+  ipLocation = "Lookup failed";
+}
+
         } catch {
           ipLocation = "Lookup failed";
         }

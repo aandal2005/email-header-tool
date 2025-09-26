@@ -56,10 +56,13 @@ const Header = mongoose.model("Header", headerSchema);
 
 // ---------------- HELPERS ----------------
 function extractSenderIP(header) {
-  // Corrected regex to match IPv4 inside [] or plain
-  const ipRegex = /\[?(\d{1,3}(?:\.\d{1,3}){3})\]?/;
-  const match = header.match(ipRegex);
-  return match ? match[1] : null;
+  // Scan Received: headers from bottom to top
+  const receivedLines = header.split("\n").filter(l => l.toLowerCase().startsWith("received:"));
+  for (let i = receivedLines.length - 1; i >= 0; i--) {
+    const match = receivedLines[i].match(/\[([0-9.]+)\]/);
+    if (match) return match[1];
+  }
+  return null;
 }
 
 async function getDmarcRecord(domain) {
@@ -154,20 +157,27 @@ app.post("/analyze", async (req, res) => {
     const spf = spfRaw ? spfRaw.toLowerCase() : "not found";
     const dkim = dkimRaw ? dkimRaw.toLowerCase() : "not found";
 
-    let dmarc = "not found";
-    if (result["From"]) {
+   let dmarc = "not found";
+if (result["From"]) {
+  try {
+    const match = result["From"].match(/<(.+)>/);
+    const fromEmail = match?.[1] || result["From"];
+    const fromDomain = fromEmail.split("@")[1];
+    if (fromDomain) {
       try {
-        const match = result["From"].match(/<(.+)>/);
-        const fromEmail = match?.[1] || result["From"];
-        const fromDomain = fromEmail.split("@")[1];
-        if (fromDomain) {
-          const dmarcRecord = await getDmarcRecord(fromDomain);
-          if (dmarcRecord) dmarc = parseDmarcPolicy(dmarcRecord);
-        }
-      } catch {
+        const dmarcRecord = await getDmarcRecord(fromDomain);
+        dmarc = parseDmarcPolicy(dmarcRecord);
+      } catch(err) {
+        console.error("DMARC lookup error:", err);
         dmarc = "lookup failed";
       }
     }
+  } catch(err) {
+    console.error("DMARC parsing error:", err);
+    dmarc = "lookup failed";
+  }
+}
+
 
     result["SPF Status"] = spf;
     result["DKIM Status"] = dkim;
@@ -184,17 +194,21 @@ app.post("/analyze", async (req, res) => {
     let senderIP = extractSenderIP(header);
     result["Sender IP"] = senderIP || "Not found";
 
-    try {
-      if (senderIP) {
-        const geo = await fetch(`http://ip-api.com/json/${senderIP}`);
-        const loc = await geo.json();
-        result["IP Location"] = loc.status === "success" ? `${loc.city}, ${loc.regionName}, ${loc.country}` : "❌ Lookup failed";
-      } else {
-        result["IP Location"] = "N/A";
-      }
-    } catch {
-      result["IP Location"] = "❌ Lookup failed";
-    }
+   try {
+  if (senderIP) {
+    const geo = await fetch(`http://ip-api.com/json/${senderIP}`);
+    const loc = await geo.json();
+    result["IP Location"] = loc.status === "success" 
+      ? `${loc.city}, ${loc.regionName}, ${loc.country}` 
+      : "❌ Lookup failed";
+  } else {
+    result["IP Location"] = "N/A";
+  }
+} catch(err) {
+  console.error("IP geolocation error:", err);
+  result["IP Location"] = "❌ Lookup failed";
+}
+
 
     await Header.create({
       from: result["From"],

@@ -16,7 +16,11 @@ app.use(express.json());
 
 // CORS: allow your frontend
 app.use(cors({
-  origin: ['https://email-header-frontend.onrender.com'], 
+  origin: [
+    "https://email-header-frontend.onrender.com",
+    "http://127.0.0.1:5500",  // local testing in VSCode/Live Server
+    "http://localhost:3000"   // dev mode
+  ],
   methods: ['GET','POST','DELETE','OPTIONS'],
   allowedHeaders: ['Content-Type','Authorization']
 }));

@@ -160,15 +160,10 @@ for (let i = receivedLines.length - 1; i >= 0; i--) {
   if (match) {
     senderIP = match[1];
     try {
-      const geoRes = await fetch(`https://ipinfo.io/${senderIP}/json`);
-      const geoData = await geoRes.json();
-
-      // IPinfo Lite provides "city", "region", "country"
-      ipLocation = `${geoData.city || 'Unknown'}, ${geoData.region || 'Unknown'}, ${geoData.country || 'Unknown'}`;
-
-    } catch (err) {
-      ipLocation = "Lookup failed";
-      console.error("IPinfo Lite error:", err.message);
+      const geoRes = await fetch(`https://api.ipgeolocation.io/ipgeo?apiKey=YOUR_API_KEY&ip=${senderIP}`);
+const geoData = await geoRes.json();
+ipLocation = `${geoData.city}, ${geoData.state_prov}, ${geoData.country_name}`;
+r:", err.message);
     }
     break;
   }

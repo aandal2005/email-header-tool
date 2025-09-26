@@ -148,7 +148,7 @@ app.post("/analyze", async (req, res) => {
     const lines = header.split("\n");
     const result = {};
 
-    // Extract core header fields
+    // Extract important header values
     lines.forEach(line => {
       const [key, ...rest] = line.split(":");
       if (!key || rest.length === 0) return;
@@ -158,7 +158,7 @@ app.post("/analyze", async (req, res) => {
       }
     });
 
-    // Extract SPF/DKIM/DMARC from header text (best-effort)
+    // SPF, DKIM, DMARC
     const spf = (header.match(/spf=(\w+)/i)?.[1] || "not found").toLowerCase();
     const dkim = (header.match(/dkim=(\w+)/i)?.[1] || "not found").toLowerCase();
     const dmarc = (header.match(/dmarc=(\w+)/i)?.[1] || "not found").toLowerCase();
@@ -167,6 +167,7 @@ app.post("/analyze", async (req, res) => {
     result["DKIM Status"] = dkim;
     result["DMARC Status"] = dmarc;
 
+    // Safe Meter
     const passCount = [spf, dkim, dmarc].filter(v => v === "pass").length;
     result["Safe Meter"] =
       passCount === 3
@@ -175,42 +176,23 @@ app.post("/analyze", async (req, res) => {
         ? "⚠️ Risk – Partial checks passed"
         : "❌ Unsafe – Failed checks";
 
-    // ---------- Sender IP & Geo ----------
+    // ---------- Sender IP & Geo using geoip-lite ----------
     const receivedLines = header.split("\n").filter(l => l.toLowerCase().startsWith("received:"));
     let senderIP = "Not found";
     let ipLocation = "Unknown";
-
-    const isPrivateIP = (ip) => /^(10\.|127\.|172\.(1[6-9]|2\d|3[0-1])\.|192\.168\.)/.test(ip);
 
     for (let i = receivedLines.length - 1; i >= 0; i--) {
       const match = receivedLines[i].match(/\[([0-9.]+)\]/);
       if (match) {
         senderIP = match[1];
 
-        if (!isPrivateIP(senderIP)) {
-          try {
-            // Primary: ipwhois.app
-            const geoRes = await fetch(`https://ipwhois.app/json/${senderIP}`);
-            const geoData = await geoRes.json();
-
-            if (geoData && (geoData.success === true || geoData.success === undefined)) {
-              ipLocation = `${geoData.city || 'Unknown'}, ${geoData.region || 'Unknown'}, ${geoData.country || 'Unknown'}`;
-            } else {
-              // Fallback: ip-api (HTTPS)
-              const fbRes = await fetch(`https://ip-api.com/json/${senderIP}?fields=status,city,regionName,country,message`);
-              const fb = await fbRes.json();
-              ipLocation = fb.status === 'success'
-                ? `${fb.city || 'Unknown'}, ${fb.regionName || 'Unknown'}, ${fb.country || 'Unknown'}`
-                : `Lookup failed (${fb?.message || 'no data'})`;
-            }
-          } catch (err) {
-            console.error("IP lookup error:", err);
-            ipLocation = "Lookup failed";
-          }
+        // geoip-lite lookup
+        const geo = geoip.lookup(senderIP);
+        if (geo) {
+          ipLocation = `${geo.city || 'Unknown'}, ${geo.region || 'Unknown'}, ${geo.country || 'Unknown'}`;
         } else {
-          ipLocation = "Private / local IP";
+          ipLocation = "Lookup failed";
         }
-
         break;
       }
     }
@@ -232,7 +214,6 @@ app.post("/analyze", async (req, res) => {
       ipLocation,
     });
 
-    // Respond with result
     res.json(result);
 
   } catch (err) {

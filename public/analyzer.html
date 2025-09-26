@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Email Header Analyzer</title>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -13,7 +13,6 @@
       margin: 0;
       padding: 0;
     }
-
     header {
       background: #1e293b;
       color: white;
@@ -21,9 +20,7 @@
       text-align: center;
       font-size: 24px;
       font-weight: bold;
-      letter-spacing: 1px;
     }
-
     main {
       max-width: 900px;
       margin: 30px auto;
@@ -32,13 +29,6 @@
       border-radius: 15px;
       box-shadow: 0 8px 20px rgba(0,0,0,0.2);
     }
-
-    h1 {
-      color: #2563eb;
-      text-align: center;
-      margin-bottom: 10px;
-    }
-
     textarea {
       width: 100%;
       height: 150px;
@@ -46,10 +36,8 @@
       border: 2px solid #ddd;
       border-radius: 10px;
       font-size: 14px;
-      margin-top: 15px;
       resize: vertical;
     }
-
     button {
       margin-top: 20px;
       padding: 12px 25px;
@@ -62,96 +50,37 @@
       transition: 0.3s;
       margin-right: 10px;
     }
-
-    button:hover {
-      background: #1d4ed8;
-    }
-
-    .result-card {
-      margin-top: 25px;
-      padding: 20px;
-      border-radius: 12px;
-      background: #f9fafb;
-      box-shadow: 0 6px 15px rgba(0,0,0,0.1);
-      display: none;
-      animation: fadeIn 0.5s ease-in;
-    }
-
-    @keyframes fadeIn {
-      from {opacity:0; transform: translateY(-10px);}
-      to {opacity:1; transform: translateY(0);}
-    }
-
-    .result-item {
-      display: flex;
-      align-items: center;
-      margin: 10px 0;
-      font-size: 15px;
-    }
-
-    .result-item i {
-      margin-right: 10px;
-      color: #2563eb;
-      width: 25px;
-      text-align: center;
-    }
-
-    .badge {
-      display: inline-block;
-      padding: 5px 10px;
-      border-radius: 5px;
-      color: white;
-      margin-left: 5px;
-    }
-
-    .success { background: #22c55e; }
-    .warning { background: #f59e0b; }
-    .danger { background: #ef4444; }
-
-    footer {
-      text-align: center;
-      padding: 20px;
-      background: #1e293b;
-      color: white;
-      margin-top: 30px;
-      font-size: 14px;
-    }
-
-    footer a { color:#22c55e; text-decoration:none; }
+    button:hover { background: #1d4ed8; }
+    table { border-collapse: collapse; width: 100%; margin-top: 20px; }
+    table, th, td { border: 1px solid #ddd; }
+    th, td { padding: 10px; text-align: left; }
+    th { background-color: #2563eb; color: white; }
+    .result-card { margin-top: 20px; }
   </style>
 </head>
 <body>
   <header>📧 Email Header Analyzer</header>
-
   <main>
-    <h1>Analyze Your Email Header</h1>
-    <textarea id="emailHeader" placeholder="Paste your email header here..."></textarea>
-    <div style="text-align:center;">
-      <button onclick="analyzeHeader()">🔍 Analyze</button>
-    </div>
+    <h2>Paste your email header below</h2>
+    <textarea id="emailHeader" placeholder="Paste your email header here..."></textarea><br>
+    <button onclick="analyzeHeader()">🔍 Analyze</button>
 
     <div id="result" class="result-card"></div>
   </main>
 
-  <footer>
-    © 2025 Email Header Tool | <a href="https://github.com/yourrepo">GitHub</a>
-  </footer>
-
   <script>
     async function analyzeHeader() {
+      const headerText = document.getElementById("emailHeader").value.trim();
       const resultDiv = document.getElementById("result");
-      resultDiv.style.display = "block";
       resultDiv.innerHTML = "<p>Analyzing...</p>";
 
-      const headerText = document.getElementById("emailHeader").value.trim();
       if (!headerText) {
-        resultDiv.innerHTML = "<p>Please paste an email header!</p>";
+        resultDiv.innerHTML = "<p style='color:red;'>Please paste an email header!</p>";
         return;
       }
 
       try {
-        const backendURL = "https://email-header-backend.onrender.com/analyze";
-
+        const backendURL = "https://email-header-backend.onrender.com/analyze"; // your backend
         const res = await fetch(backendURL, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -161,31 +90,30 @@
         if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
         const data = await res.json();
 
-        function badge(status) {
-          if (status === "pass" || (status && status.includes("Safe"))) return "success";
-          if (status === "not found" || (status && status.includes("Partial"))) return "warning";
-          return "danger";
+        if (data.error) {
+          resultDiv.innerHTML = `<p style='color:red;'>Error: ${data.error}</p>`;
+          return;
         }
 
-        const spf = data.spf || "N/A";
-        const dkim = data.dkim || "N/A";
-        const dmarc = data.dmarc || "N/A";
-        const safeMeter = data.safeMeter || "N/A";
-        const senderIP = data.senderIP || "N/A";
-        const ipLocation = data.ipLocation || "N/A";
-
+        // Display result in a table
         resultDiv.innerHTML = `
-          <h3 style="text-align:center;">Result:</h3>
-          <div class="result-item"><i class="fas fa-shield-alt"></i> <b>SPF:</b> <span class="badge ${badge(spf)}">${spf.toUpperCase()}</span></div>
-          <div class="result-item"><i class="fas fa-check-circle"></i> <b>DKIM:</b> <span class="badge ${badge(dkim)}">${dkim.toUpperCase()}</span></div>
-          <div class="result-item"><i class="fas fa-user-shield"></i> <b>DMARC:</b> <span class="badge ${badge(dmarc)}">${dmarc.toUpperCase()}</span></div>
-          <div class="result-item"><i class="fas fa-heart"></i> <b>Safe Meter:</b> <span class="badge ${badge(safeMeter)}">${safeMeter}</span></div>
-          <hr>
-          <div class="result-item"><i class="fas fa-network-wired"></i> <b>Sender IP:</b> ${senderIP}</div>
-          <div class="result-item"><i class="fas fa-map-marker-alt"></i> <b>IP Location:</b> ${ipLocation}</div>
+          <table>
+            <tr><th>Field</th><th>Value</th></tr>
+            <tr><td>From</td><td>${data.From || "N/A"}</td></tr>
+            <tr><td>To</td><td>${data.To || "N/A"}</td></tr>
+            <tr><td>Subject</td><td>${data.Subject || "N/A"}</td></tr>
+            <tr><td>Date</td><td>${data.Date || "N/A"}</td></tr>
+            <tr><td>SPF</td><td>${data["SPF Status"] || "N/A"}</td></tr>
+            <tr><td>DKIM</td><td>${data["DKIM Status"] || "N/A"}</td></tr>
+            <tr><td>DMARC</td><td>${data["DMARC Status"] || "N/A"}</td></tr>
+            <tr><td>Safe Meter</td><td>${data["Safe Meter"] || "N/A"}</td></tr>
+            <tr><td>Sender IP</td><td>${data["Sender IP"] || "N/A"}</td></tr>
+            <tr><td>IP Location</td><td>${data["IP Location"] || "N/A"}</td></tr>
+          </table>
         `;
       } catch (err) {
-        resultDiv.innerHTML = `<p>Error fetching results: ${err.message}</p>`;
+        console.error(err);
+        resultDiv.innerHTML = `<p style='color:red;'>Error fetching results: ${err.message}</p>`;
       }
     }
   </script>

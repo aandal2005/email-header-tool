@@ -39,12 +39,6 @@
       margin-bottom: 10px;
     }
 
-    p {
-      text-align: center;
-      font-size: 14px;
-      color: #555;
-    }
-
     textarea {
       width: 100%;
       height: 150px;
@@ -88,6 +82,32 @@
       to {opacity:1; transform: translateY(0);}
     }
 
+    .result-item {
+      display: flex;
+      align-items: center;
+      margin: 10px 0;
+      font-size: 15px;
+    }
+
+    .result-item i {
+      margin-right: 10px;
+      color: #2563eb;
+      width: 25px;
+      text-align: center;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 5px 10px;
+      border-radius: 5px;
+      color: white;
+      margin-left: 5px;
+    }
+
+    .success { background: #22c55e; }
+    .warning { background: #f59e0b; }
+    .danger { background: #ef4444; }
+
     footer {
       text-align: center;
       padding: 20px;
@@ -98,14 +118,24 @@
     }
 
     footer a { color:#22c55e; text-decoration:none; }
-  </style></head>
+  </style>
+</head>
 <body>
-  <h2>Email Header Analyzer</h2>
+  <header>📧 Email Header Analyzer</header>
 
-  <textarea id="emailHeader" placeholder="Paste your email header here..."></textarea><br>
-  <button onclick="analyzeHeader()">Analyze</button>
+  <main>
+    <h1>Analyze Your Email Header</h1>
+    <textarea id="emailHeader" placeholder="Paste your email header here..."></textarea>
+    <div style="text-align:center;">
+      <button onclick="analyzeHeader()">🔍 Analyze</button>
+    </div>
 
-  <div id="result"></div>
+    <div id="result" class="result-card"></div>
+  </main>
+
+  <footer>
+    © 2025 Email Header Tool | <a href="https://github.com/yourrepo">GitHub</a>
+  </footer>
 
   <script>
     async function analyzeHeader() {
@@ -131,26 +161,28 @@
         if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
         const data = await res.json();
 
-        if (data.error) {
-          resultDiv.innerHTML = `<p>Error: ${data.error}</p>`;
-          return;
-        }
-
         function badge(status) {
           if (status === "pass" || (status && status.includes("Safe"))) return "success";
           if (status === "not found" || (status && status.includes("Partial"))) return "warning";
           return "danger";
         }
 
+        const spf = data.spf || "N/A";
+        const dkim = data.dkim || "N/A";
+        const dmarc = data.dmarc || "N/A";
+        const safeMeter = data.safeMeter || "N/A";
+        const senderIP = data.senderIP || "N/A";
+        const ipLocation = data.ipLocation || "N/A";
+
         resultDiv.innerHTML = `
           <h3 style="text-align:center;">Result:</h3>
-          <div class="result-item"><i class="fas fa-shield-alt"></i> <b>SPF:</b> <span class="badge ${badge(data.spf)}">${data.spf?.toUpperCase()}</span></div>
-          <div class="result-item"><i class="fas fa-check-circle"></i> <b>DKIM:</b> <span class="badge ${badge(data.dkim)}">${data.dkim?.toUpperCase()}</span></div>
-          <div class="result-item"><i class="fas fa-user-shield"></i> <b>DMARC:</b> <span class="badge ${badge(data.dmarc)}">${data.dmarc?.toUpperCase()}</span></div>
-          <div class="result-item"><i class="fas fa-heart"></i> <b>Safe Meter:</b> <span class="badge ${badge(data.safeMeter)}">${data.safeMeter}</span></div>
+          <div class="result-item"><i class="fas fa-shield-alt"></i> <b>SPF:</b> <span class="badge ${badge(spf)}">${spf.toUpperCase()}</span></div>
+          <div class="result-item"><i class="fas fa-check-circle"></i> <b>DKIM:</b> <span class="badge ${badge(dkim)}">${dkim.toUpperCase()}</span></div>
+          <div class="result-item"><i class="fas fa-user-shield"></i> <b>DMARC:</b> <span class="badge ${badge(dmarc)}">${dmarc.toUpperCase()}</span></div>
+          <div class="result-item"><i class="fas fa-heart"></i> <b>Safe Meter:</b> <span class="badge ${badge(safeMeter)}">${safeMeter}</span></div>
           <hr>
-          <div class="result-item"><i class="fas fa-network-wired"></i> <b>Sender IP:</b> ${data.senderIP}</div>
-          <div class="result-item"><i class="fas fa-map-marker-alt"></i> <b>IP Location:</b> ${data.ipLocation}</div>
+          <div class="result-item"><i class="fas fa-network-wired"></i> <b>Sender IP:</b> ${senderIP}</div>
+          <div class="result-item"><i class="fas fa-map-marker-alt"></i> <b>IP Location:</b> ${ipLocation}</div>
         `;
       } catch (err) {
         resultDiv.innerHTML = `<p>Error fetching results: ${err.message}</p>`;

@@ -9,7 +9,7 @@ const jwt = require("jsonwebtoken");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-const JWT_SECRET = "YourJWTSecretKey123!"; // Hardcoded for simplicity, can change
+const JWT_SECRET = "YourJWTSecretKey123!"; // Hardcoded for simplicity
 
 // ---------------- MIDDLEWARE ----------------
 app.use(express.json());
@@ -56,6 +56,7 @@ const Header = mongoose.model("Header", headerSchema);
 
 // ---------------- HELPERS ----------------
 function extractSenderIP(header) {
+  // Corrected regex to match IPv4 inside [] or plain
   const ipRegex = /\[?(\d{1,3}(?:\.\d{1,3}){3})\]?/;
   const match = header.match(ipRegex);
   return match ? match[1] : null;
@@ -71,6 +72,7 @@ async function getDmarcRecord(domain) {
 }
 
 function parseDmarcPolicy(record) {
+  if (!record) return "not found";
   const match = record.match(/p=([a-zA-Z]+)/);
   return match ? match[1].toLowerCase() : "none";
 }

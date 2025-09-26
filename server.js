@@ -18,15 +18,16 @@ app.use(express.json());
 app.use(cors({
   origin: [
     "https://email-header-frontend.onrender.com",
-    "http://127.0.0.1:5500",  // local testing in VSCode/Live Server
-    "http://localhost:3000"   // dev mode
+    "http://127.0.0.1:5500",
+    "http://localhost:3000"
   ],
   methods: ['GET','POST','DELETE','OPTIONS'],
-  allowedHeaders: ['Content-Type','Authorization']
+  allowedHeaders: ['Content-Type','Authorization'],
+  credentials: true // optional if you use cookies/auth
 }));
 
-app.options('*', cors()); // preflight
-
+// Handle OPTIONS preflight requests for all routes
+app.options('*', cors());
 // ---------------- DATABASE ----------------
 const MONGO_URI = "mongodb+srv://aandal:aandal2005@emailheadercluster.e2ir8k8.mongodb.net/?retryWrites=true&w=majority&appName=EmailHeaderCluster";
 

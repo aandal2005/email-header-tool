@@ -141,6 +141,8 @@ app.post("/analyze", async (req, res) => {
     const { header } = req.body;
     if (!header) return res.status(400).json({ error: "No header provided" });
 
+    console.log("Incoming header:", header); // optional: debug
+
     const importantKeys = ["From", "To", "Subject", "Date"];
     const lines = header.split("\n");
     const result = {};
@@ -157,27 +159,11 @@ app.post("/analyze", async (req, res) => {
     const spf = spfRaw ? spfRaw.toLowerCase() : "not found";
     const dkim = dkimRaw ? dkimRaw.toLowerCase() : "not found";
 
-   let dmarc = "not found";
-if (result["From"]) {
-  try {
-    const match = result["From"].match(/<(.+)>/);
-    const fromEmail = match?.[1] || result["From"];
-    const fromDomain = fromEmail.split("@")[1];
-    if (fromDomain) {
-      try {
-        const dmarcRecord = await getDmarcRecord(fromDomain);
-        dmarc = parseDmarcPolicy(dmarcRecord);
-      } catch(err) {
-        console.error("DMARC lookup error:", err);
-        dmarc = "lookup failed";
-      }
-    }
-  } catch(err) {
-    console.error("DMARC parsing error:", err);
-    dmarc = "lookup failed";
-  }
-}
-
+    // ---------------- TEMPORARY TEST ----------------
+    let dmarc = "skipped for testing";
+    let senderIP = "0.0.0.0";
+    let ipLocation = "skipped for testing";
+    // -------------------------------------------------
 
     result["SPF Status"] = spf;
     result["DKIM Status"] = dkim;
@@ -191,24 +177,8 @@ if (result["From"]) {
     else if (passCount >= 2 || (passCount >= 1 && unknownCount > 0)) result["Safe Meter"] = "⚠️ Risk – Partial checks passed";
     else result["Safe Meter"] = "❌ Unsafe – Failed checks";
 
-    let senderIP = extractSenderIP(header);
-    result["Sender IP"] = senderIP || "Not found";
-
-   try {
-  if (senderIP) {
-    const geo = await fetch(`http://ip-api.com/json/${senderIP}`);
-    const loc = await geo.json();
-    result["IP Location"] = loc.status === "success" 
-      ? `${loc.city}, ${loc.regionName}, ${loc.country}` 
-      : "❌ Lookup failed";
-  } else {
-    result["IP Location"] = "N/A";
-  }
-} catch(err) {
-  console.error("IP geolocation error:", err);
-  result["IP Location"] = "❌ Lookup failed";
-}
-
+    result["Sender IP"] = senderIP;
+    result["IP Location"] = ipLocation;
 
     await Header.create({
       from: result["From"],
@@ -238,7 +208,7 @@ if (result["From"]) {
 
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: "Analysis failed" });
+    res.status(500).json({ error: "Analysis failed", details: err.message });
   }
 });
 

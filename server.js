@@ -7,6 +7,7 @@ const cors = require("cors");
 const dns = require("dns").promises;
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
+const fetch = require("node-fetch");
 
 const app = express();
 const PORT = process.env.PORT || 5000;

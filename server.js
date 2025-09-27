@@ -157,22 +157,42 @@ app.post("/analyze", async (req, res) => {
       : passCount >= 2
       ? "⚠️ Risk – Partial checks passed"
       : "❌ Unsafe – Failed checks";
+let senderIP = extractSenderIP(header) || "Not found";
+let ipLocation = "Unknown";
 
-    let senderIP = extractSenderIP(header) || "Not found";
-    let ipLocation = "Unknown";
+if (senderIP !== "Not found") {
+  try {
+    // Use ipwhois.app
+    const response = await fetch(`https://ipwhois.app/json/${senderIP}`);
+    if (!response.ok) throw new Error(`HTTP error ${response.status}`);
 
-    if (senderIP !== "Not found") {
-      try {
-        const response = await fetch(`https://ipwhois.app/json/${senderIP}`);
-        const geoData = await response.json();
-        ipLocation = geoData.city
-          ? `${geoData.city}, ${geoData.country}`
-          : "Lookup failed";
-      } catch (err) {
-        console.error("IP lookup error:", err);
-        ipLocation = "Lookup failed";
-      }
+    const geoData = await response.json();
+
+    if (geoData && geoData.success !== false) {
+      // success field is false for private/reserved IPs
+      ipLocation = geoData.city
+        ? `${geoData.city}, ${geoData.country}`
+        : `${geoData.country || "Unknown"}`;
+    } else {
+      ipLocation = "Private or unknown IP";
     }
+
+  } catch (err) {
+    console.error("IP lookup error:", err.message);
+
+    // Fallback: try another free API
+    try {
+      const fallback = await fetch(`http://ip-api.com/json/${senderIP}`);
+      const data = await fallback.json();
+      ipLocation = data.status === "success"
+        ? `${data.city || "Unknown"}, ${data.country || "Unknown"}`
+        : "Lookup failed";
+    } catch (fallbackErr) {
+      console.error("Fallback IP lookup failed:", fallbackErr.message);
+      ipLocation = "Lookup failed";
+    }
+  }
+}
 
     result["Sender IP"] = senderIP;
     result["IP Location"] = ipLocation;

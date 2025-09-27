@@ -121,7 +121,7 @@ app.post("/login", async (req, res) => {
 // ---- ANALYZE ----
 app.post("/analyze", async (req, res) => {
   try {
-    const { header } = req.body;
+    const { header } = req.body || {}; // safer
     if (!header) return res.status(400).json({ error: "No header provided" });
 
     const importantKeys = ["From","To","Subject","Date"];
@@ -148,7 +148,6 @@ app.post("/analyze", async (req, res) => {
                            passCount>=2 ? "⚠️ Risk – Partial checks passed" :
                            "❌ Unsafe – Failed checks";
 
-    // ---- Sender IP & Geo ----
     const receivedLines = header.split("\n").filter(l => l.toLowerCase().startsWith("received:"));
     let senderIP = "Not found";
     let ipLocation = "Unknown";
@@ -171,6 +170,15 @@ app.post("/analyze", async (req, res) => {
 
     result["Sender IP"] = senderIP;
     result["IP Location"] = ipLocation;
+
+    res.json(result);
+
+  } catch (err) {
+    console.error("Analyze error:", err);
+    res.status(500).json({ error: "Analysis failed", details: err.message });
+  }
+});
+
 
     // ---- Save to DB ----
     await Header.create({

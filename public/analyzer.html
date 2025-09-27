@@ -82,11 +82,15 @@
       try {
       const backendURL = "https://email-header-backend.onrender.com/analyze";
 // your backend
-        const res = await fetch(backendURL, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ header: headerText })
-        });
+        const res = await fetch("https://email-header-backend.onrender.com/analyze", {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json", // ❌ needed
+    "Authorization": "Bearer " + token // if using JWT
+  },
+  body: JSON.stringify({ header: emailHeaderText })
+});
+
 
         if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
         const data = await res.json();

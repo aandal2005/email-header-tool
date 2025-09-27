@@ -79,18 +79,23 @@
         return;
       }
 
-      try {
-      const backendURL = "https://email-header-backend.onrender.com/analyze";
-// your backend
-        const res = await fetch("https://email-header-backend.onrender.com/analyze", {
-  method: "POST",
-  headers: {
-    "Content-Type": "application/json", // ❌ needed
-    "Authorization": "Bearer " + token // if using JWT
-  },
-  body: JSON.stringify({ header: emailHeaderText })
-});
+      // ✅ Get token from localStorage
+      const token = localStorage.getItem("token");
+      if (!token) {
+        resultDiv.innerHTML = "<p style='color:red;'>You must log in first!</p>";
+        return;
+      }
 
+      try {
+        const backendURL = "https://email-header-backend.onrender.com/analyze";
+        const res = await fetch(backendURL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + token // ✅ Send token
+          },
+          body: JSON.stringify({ header: headerText }) // ✅ Use correct variable
+        });
 
         if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
         const data = await res.json();

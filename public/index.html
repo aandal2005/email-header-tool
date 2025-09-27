@@ -126,7 +126,6 @@
       <p class="toggle" onclick="toggleForm()">Don't have an account? Sign Up</p>
       <p id="message"></p>
       <a href="admin.html" id="adminPanelLink" style="display:none;">Admin Panel</a>
-
     </div>
   </div>
 
@@ -182,12 +181,15 @@
           message.className = 'error';
           message.textContent = `❌ ${data.error || "Something went wrong"}`;
         } else {
-          message.className = 'success';
-          message.textContent = data.message;
-
+          // For login: save token and redirect
           if (!isSignup && data.token) {
             localStorage.setItem("token", data.token);
+            message.className = 'success';
+            message.textContent = "✅ Login successful! Redirecting...";
             setTimeout(() => window.location.href = 'analyzer.html', 1200);
+          } else {
+            message.className = 'success';
+            message.textContent = data.message || "✅ Account created successfully!";
           }
         }
       } catch (err) {

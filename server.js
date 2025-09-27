@@ -15,22 +15,28 @@ mongoose.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopol
   .then(() => console.log("✅ MongoDB connected"))
   .catch(err => console.error("❌ MongoDB connection error:", err));
 
-// ---------------- MIDDLEWARE ----------------
-app.use(express.json());
+const allowedOrigins = [
+  "https://email-header-frontend.onrender.com",
+  "http://localhost:3000" // for local testing
+];
 
-const allowedOrigins = ["https://email-header-frontend.onrender.com", "http://localhost:3000"];
 app.use(cors({
   origin: function(origin, callback){
-    if(!origin) return callback(null, true); // allow Postman or no-origin requests
+    // allow requests with no origin (like Postman)
+    if(!origin) return callback(null, true); 
     if(allowedOrigins.indexOf(origin) === -1){
-      return callback(new Error(`CORS not allowed for origin: ${origin}`), false);
+      const msg = `The CORS policy does not allow access from the origin: ${origin}`;
+      return callback(new Error(msg), false);
     }
     return callback(null, true);
   },
   credentials: true,
-  methods: ['GET','POST','DELETE','OPTIONS'],
-  allowedHeaders: ['Content-Type','Authorization']
+  methods: ["GET", "POST", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"]
 }));
+
+// Handle preflight requests for all routes
+app.options("*", cors());
 
 // ---------------- SCHEMAS ----------------
 const userSchema = new mongoose.Schema({

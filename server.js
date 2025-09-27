@@ -1,28 +1,60 @@
 // server.js
+require('dotenv').config();
+
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
-const dns = require("dns").promises;
-const fetch = require("node-fetch");
+const dns = require("dns").promises; // kept - you can use getDmarcRecord later if needed
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
-require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-const JWT_SECRET = "YourJWTSecretKey123!";
+const JWT_SECRET = process.env.JWT_SECRET || "YourJWTSecretKey123!";
+
+// Use Node's global fetch (Node 18+) — avoids node-fetch version problems
+const fetchFn = globalThis.fetch.bind(globalThis);
+
+// Try loading geoip-lite (optional). If not installed, server will still work.
+let geoip = null;
+try {
+  geoip = require("geoip-lite");
+} catch (err) {
+  // geoip not available — we will gracefully fallback to online APIs only
+  geoip = null;
+  console.warn("geoip-lite not installed — falling back to online IP lookup only.");
+}
 
 // ---------------- MIDDLEWARE ----------------
 app.use(express.json());
+
+// Allowed origins (update with any additional dev URLs you use)
+const allowedOrigins = [
+  "https://email-header-frontend.onrender.com",
+  "http://localhost:3000",
+  "http://127.0.0.1:5500"
+];
+
 app.use(cors({
-  origin: ['https://email-header-frontend.onrender.com'],
-  methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  origin: function (origin, callback) {
+    // allow requests with no origin (like curl or server-to-server)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      return callback(null, true);
+    } else {
+      return callback(new Error('CORS policy: This origin is not allowed'), false);
+    }
+  },
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  optionsSuccessStatus: 200
 }));
+
+// Ensure OPTIONS preflight responds
 app.options('*', cors());
 
 // ---------------- DATABASE ----------------
-const MONGO_URI = "mongodb+srv://aandal:aandal2005@emailheadercluster.e2ir8k8.mongodb.net/?retryWrites=true&w=majority&appName=EmailHeaderCluster";
+const MONGO_URI = process.env.MONGO_URI || "mongodb+srv://aandal:aandal2005@emailheadercluster.e2ir8k8.mongodb.net/?retryWrites=true&w=majority&appName=EmailHeaderCluster";
 
 mongoose.connect(MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true })
   .then(() => console.log("✅ MongoDB connected successfully"))
@@ -54,10 +86,16 @@ const Header = mongoose.model("Header", headerSchema);
 
 // ---------------- HELPERS ----------------
 function extractSenderIP(header) {
-  const receivedLines = header.split("\n").filter(l => l.toLowerCase().startsWith("received:"));
+  // find Received: lines, scan bottom-to-top (earliest hop)
+  const receivedLines = header.split(/\r?\n/).filter(l => l.toLowerCase().startsWith("received:"));
   for (let i = receivedLines.length - 1; i >= 0; i--) {
-    const match = receivedLines[i].match(/\[([0-9.]+)\]/);
-    if (match) return match[1];
+    const line = receivedLines[i];
+    // prefer bracketed IP [1.2.3.4]
+    let m = line.match(/\[([0-9]{1,3}(?:\.[0-9]{1,3}){3})\]/);
+    if (m && m[1]) return m[1];
+    // otherwise try any IPv4-looking substring
+    m = line.match(/([0-9]{1,3}(?:\.[0-9]{1,3}){3})/);
+    if (m && m[1]) return m[1];
   }
   return null;
 }
@@ -124,9 +162,10 @@ app.post("/analyze", async (req, res) => {
     if (!header) return res.status(400).json({ error: "No header provided" });
 
     const importantKeys = ["From", "To", "Subject", "Date"];
-    const lines = header.split("\n");
+    const lines = header.split(/\r?\n/);
     const result = {};
 
+    // Extract basic header fields
     lines.forEach(line => {
       const [key, ...rest] = line.split(":");
       if (!key || rest.length === 0) return;
@@ -136,6 +175,7 @@ app.post("/analyze", async (req, res) => {
       }
     });
 
+    // SPF, DKIM, DMARC extraction (simple)
     const spf = (header.match(/spf=(\w+)/i)?.[1] || "not found").toLowerCase();
     const dkim = (header.match(/dkim=(\w+)/i)?.[1] || "not found").toLowerCase();
     const dmarc = (header.match(/dmarc=(\w+)/i)?.[1] || "not found").toLowerCase();
@@ -151,35 +191,59 @@ app.post("/analyze", async (req, res) => {
       ? "⚠️ Risk – Partial checks passed"
       : "❌ Unsafe – Failed checks";
 
-  // Sender IP extraction & Geo using IPinfo Lite
-const receivedLines = header.split("\n").filter(l => l.toLowerCase().startsWith("received:"));
-let senderIP = "Not found";
-let ipLocation = "Unknown";
+    // ---------- Sender IP & Geo (IPinfo -> geoip-lite fallback) ----------
+    let senderIP = extractSenderIP(header) || "Not found";
+    let ipLocation = "Unknown";
 
-const apiKey = process.env.IP_GEO_API_KEY;
-   for (let i = receivedLines.length - 1; i >= 0; i--) {
-  const match = receivedLines[i].match(/\[([0-9.]+)\]/);
-  if (match) {
-    senderIP = match[1];
-    try {
-      const geoRes = await fetch(`https://ipinfo.io/${senderIP}?token=${apiKey}`);
-      const geoData = await geoRes.json();
-      if (geoData.city) {
-        ipLocation = `${geoData.city}, ${geoData.region}, ${geoData.country}`;
-      } else {
-        ipLocation = "Lookup failed";
+    if (senderIP !== "Not found") {
+      try {
+        // Prefer IPinfo if token provided, otherwise try without token (limited)
+        const ipinfoKey = process.env.IP_GEO_API_KEY;
+        const ipinfoUrl = ipinfoKey
+          ? `https://ipinfo.io/${senderIP}/json?token=${ipinfoKey}`
+          : `https://ipinfo.io/${senderIP}/json`;
+
+        const geoRes = await fetchFn(ipinfoUrl);
+        if (geoRes && geoRes.ok) {
+          const geoData = await geoRes.json();
+          if (geoData && (geoData.city || geoData.region || geoData.country)) {
+            ipLocation = `${geoData.city || 'Unknown'}, ${geoData.region || 'Unknown'}, ${geoData.country || 'Unknown'}`;
+          } else {
+            // fallback to geoip-lite
+            if (geoip) {
+              const g = geoip.lookup(senderIP);
+              if (g) ipLocation = `${g.city || 'Unknown'}, ${g.region || 'Unknown'}, ${g.country || 'Unknown'}`;
+              else ipLocation = "Lookup failed";
+            } else {
+              ipLocation = "Lookup failed";
+            }
+          }
+        } else {
+          // if IPinfo failed (non-OK), fallback to geoip-lite if available
+          if (geoip) {
+            const g = geoip.lookup(senderIP);
+            if (g) ipLocation = `${g.city || 'Unknown'}, ${g.region || 'Unknown'}, ${g.country || 'Unknown'}`;
+            else ipLocation = "Lookup failed";
+          } else {
+            ipLocation = "Lookup failed";
+          }
+        }
+      } catch (err) {
+        console.error("IP lookup error:", err);
+        if (geoip) {
+          const g = geoip.lookup(senderIP);
+          if (g) ipLocation = `${g.city || 'Unknown'}, ${g.region || 'Unknown'}, ${g.country || 'Unknown'}`;
+          else ipLocation = "Lookup failed";
+        } else {
+          ipLocation = "Lookup failed";
+        }
       }
-    } catch {
-      ipLocation = "Lookup failed";
     }
-    break; // ✅ Correct: inside the loop
-  }
-}
 
-result["Sender IP"] = senderIP;
-result["IP Location"] = ipLocation;
+    result["Sender IP"] = senderIP;
+    result["IP Location"] = ipLocation;
 
-
+    // Save result to DB
     await Header.create({
       from: result["From"] || "Not found",
       to: result["To"] || "Not found",

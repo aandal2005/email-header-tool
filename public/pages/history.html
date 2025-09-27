@@ -46,15 +46,6 @@
       background: #f3f4f6;
       color: #111827;
     }
-    .badge {
-      padding: 5px 10px;
-      border-radius: 6px;
-      color: white;
-      font-size: 12px;
-    }
-    .success { background: #22c55e; }
-    .warning { background: #f59e0b; }
-    .danger { background: #ef4444; }
     .btn {
       margin: 15px 5px;
       padding: 10px 18px;
@@ -81,28 +72,30 @@
       <thead>
         <tr>
           <th>#</th>
-          <th>Email ID</th>
+          <th>From</th>
+          <th>To</th>
+          <th>Subject</th>
           <th>Date</th>
+          <th>SPF</th>
+          <th>DKIM</th>
+          <th>DMARC</th>
           <th>Safe Meter</th>
+          <th>IP</th>
+          <th>Location</th>
         </tr>
       </thead>
       <tbody id="historyTable">
-        <tr><td colspan="4">Loading history...</td></tr>
+        <tr><td colspan="11">Loading history...</td></tr>
       </tbody>
     </table>
+
     <div style="text-align:center;">
       <button class="btn" onclick="clearHistory()">🗑 Clear History</button>
-      <button class="btn" onclick="window.location.href='../analyzer.html'">⬅ Back to Analyzer
-</button>
+      <button class="btn" onclick="window.location.href='analyzer.html'">⬅ Back to Analyzer</button>
     </div>
-<div id="adminPanel" style="display:none; border: 1px solid #ccc; padding: 15px; margin-top: 20px; border-radius: 8px;">
-  <h3>Admin Panel</h3>
-  <button id="clearHistory">Clear History</button>
-</div>
-
   </main>
   <footer>© 2025 Email Header Tool</footer>
 
-  <script src="../js/history.js"></script>
+  <script src="history.js"></script>
 </body>
 </html>

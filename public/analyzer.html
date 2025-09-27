@@ -56,6 +56,17 @@
     th, td { padding: 10px; text-align: left; }
     th { background-color: #2563eb; color: white; }
     .result-card { margin-top: 20px; }
+    .link-btn {
+      display: inline-block;
+      margin-top: 15px;
+      text-decoration: none;
+      padding: 10px 18px;
+      border-radius: 8px;
+      background: #22c55e;
+      color: white;
+      font-weight: bold;
+    }
+    .link-btn:hover { background: #16a34a; }
   </style>
 </head>
 <body>
@@ -64,11 +75,20 @@
     <h2>Paste your email header below</h2>
     <textarea id="emailHeader" placeholder="Paste your email header here..."></textarea><br>
     <button onclick="analyzeHeader()">🔍 Analyze</button>
+    <a href="history.html" class="link-btn">🕒 View History</a>
 
     <div id="result" class="result-card"></div>
   </main>
 
   <script>
+    // ✅ Check if logged in on page load
+    window.onload = () => {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        alert("⚠️ You are not logged in. Please log in first!");
+      }
+    }
+
     async function analyzeHeader() {
       const headerText = document.getElementById("emailHeader").value.trim();
       const resultDiv = document.getElementById("result");
@@ -79,7 +99,6 @@
         return;
       }
 
-      // ✅ Get token from localStorage
       const token = localStorage.getItem("token");
       if (!token) {
         resultDiv.innerHTML = "<p style='color:red;'>You must log in first!</p>";
@@ -92,9 +111,9 @@
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "Authorization": "Bearer " + token // ✅ Send token
+            "Authorization": "Bearer " + token
           },
-          body: JSON.stringify({ header: headerText }) // ✅ Use correct variable
+          body: JSON.stringify({ header: headerText })
         });
 
         if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
@@ -105,7 +124,6 @@
           return;
         }
 
-        // Display result in a table
         resultDiv.innerHTML = `
           <table>
             <tr><th>Field</th><th>Value</th></tr>

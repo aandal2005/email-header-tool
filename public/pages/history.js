@@ -2,54 +2,62 @@ const BACKEND_URL = 'https://email-header-backend.onrender.com';
 
 // ✅ Fetch History
 function fetchHistory() {
-  const historyDiv = document.getElementById('history');
-  historyDiv.innerHTML = 'Loading history...';
+  const historyTable = document.getElementById('historyTable');
+  historyTable.innerHTML = '<tr><td colspan="11">Loading history...</td></tr>';
 
-  fetch(`${BACKEND_URL}/history`)
+  const token = localStorage.getItem('token'); // ✅ Get token
+  if (!token) {
+    historyTable.innerHTML = '<tr><td colspan="11" style="color:red;">You must log in first!</td></tr>';
+    return;
+  }
+
+  fetch(`${BACKEND_URL}/history`, {
+    headers: { 'Authorization': 'Bearer ' + token }
+  })
     .then(res => res.json())
     .then(history => {
-      historyDiv.innerHTML = '';
-
       if (!history || history.length === 0) {
-        historyDiv.innerHTML = '<p>No history found.</p>';
+        historyTable.innerHTML = '<tr><td colspan="11">No history found.</td></tr>';
         return;
       }
 
-      const table = document.createElement('table');
-      const headerRow = document.createElement('tr');
-      ['From', 'To', 'Subject', 'Date', 'SPF', 'DKIM', 'DMARC', 'Safe Meter', 'IP', 'Location']
-        .forEach(text => {
-          const th = document.createElement('th');
-          th.textContent = text;
-          headerRow.appendChild(th);
-        });
-      table.appendChild(headerRow);
-
-      history.forEach(item => {
-        const row = document.createElement('tr');
-        [
-          item.from, item.to, item.subject, item.date,
-          item.spf, item.dkim, item.dmarc,
-          item.safeMeter, item.senderIP, item.ipLocation
-        ].forEach(text => {
-          const td = document.createElement('td');
-          td.textContent = text || '—';
-          row.appendChild(td);
-        });
-        table.appendChild(row);
+      historyTable.innerHTML = '';
+      history.forEach((item, index) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${index + 1}</td>
+          <td>${item.from || '—'}</td>
+          <td>${item.to || '—'}</td>
+          <td>${item.subject || '—'}</td>
+          <td>${new Date(item.createdAt).toLocaleString()}</td>
+          <td>${item.spf || '—'}</td>
+          <td>${item.dkim || '—'}</td>
+          <td>${item.dmarc || '—'}</td>
+          <td>${item.safeMeter || '—'}</td>
+          <td>${item.senderIP || '—'}</td>
+          <td>${item.ipLocation || '—'}</td>
+        `;
+        historyTable.appendChild(tr);
       });
-
-      historyDiv.appendChild(table);
     })
     .catch(err => {
       console.error('❌ Error fetching history:', err);
-      historyDiv.innerHTML = '<p style="color:red;">❌ Failed to load history.</p>';
+      historyTable.innerHTML = '<tr><td colspan="11" style="color:red;">Failed to load history.</td></tr>';
     });
 }
 
-// ✅ Clear History
+// ✅ Clear History (Admins only)
 function clearHistory() {
-  fetch(`${BACKEND_URL}/history`, { method: 'DELETE' })
+  const token = localStorage.getItem('token');
+  if (!token) {
+    alert('❌ You must log in first!');
+    return;
+  }
+
+  fetch(`${BACKEND_URL}/history`, {
+    method: 'DELETE',
+    headers: { 'Authorization': 'Bearer ' + token }
+  })
     .then(res => res.json())
     .then(data => {
       alert('✅ ' + data.message);
@@ -61,5 +69,5 @@ function clearHistory() {
     });
 }
 
-// Auto load history
+// Auto load history on page load
 window.onload = fetchHistory;

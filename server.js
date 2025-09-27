@@ -22,7 +22,6 @@ const allowedOrigins = [
 
 app.use(cors({
   origin: function(origin, callback){
-    // allow requests with no origin (like Postman)
     if(!origin) return callback(null, true); 
     if(allowedOrigins.indexOf(origin) === -1){
       const msg = `The CORS policy does not allow access from the origin: ${origin}`;
@@ -35,7 +34,6 @@ app.use(cors({
   allowedHeaders: ["Content-Type", "Authorization"]
 }));
 
-// Handle preflight requests for all routes
 app.options("*", cors());
 
 // ---------------- SCHEMAS ----------------
@@ -119,7 +117,6 @@ app.post("/login", async (req, res) => {
 });
 
 // ---- ANALYZE ----
-// --------- ANALYZE HEADER ---------
 app.post("/analyze", async (req, res) => {
   try {
     const { header } = req.body;
@@ -129,7 +126,6 @@ app.post("/analyze", async (req, res) => {
     const lines = header.split(/\r?\n/);
     const result = {};
 
-    // Extract basic header fields
     lines.forEach(line => {
       const [key, ...rest] = line.split(":");
       if (!key || rest.length === 0) return;
@@ -139,7 +135,6 @@ app.post("/analyze", async (req, res) => {
       }
     });
 
-    // SPF, DKIM, DMARC extraction
     const spf = (header.match(/spf=(\w+)/i)?.[1] || "not found").toLowerCase();
     const dkim = (header.match(/dkim=(\w+)/i)?.[1] || "not found").toLowerCase();
     const dmarc = (header.match(/dmarc=(\w+)/i)?.[1] || "not found").toLowerCase();
@@ -155,7 +150,6 @@ app.post("/analyze", async (req, res) => {
       ? "⚠️ Risk – Partial checks passed"
       : "❌ Unsafe – Failed checks";
 
-    // Sender IP extraction
     let senderIP = extractSenderIP(header) || "Not found";
     let ipLocation = "Unknown";
 
@@ -175,7 +169,7 @@ app.post("/analyze", async (req, res) => {
     result["Sender IP"] = senderIP;
     result["IP Location"] = ipLocation;
 
-    // ✅ FIX: This await is now inside async function
+    // ✅ Save only once
     await Header.create({
       from: result["From"] || "Not found",
       to: result["To"] || "Not found",
@@ -190,26 +184,6 @@ app.post("/analyze", async (req, res) => {
     });
 
     res.json(result);
-  } catch (err) {
-    console.error("Analyze error:", err);
-    res.status(500).json({ error: "Analysis failed", details: err.message });
-  }
-});
-
-
-    // ---- Save to DB ----
-    await Header.create({
-      from: result["From"] || "Not found",
-      to: result["To"] || "Not found",
-      subject: result["Subject"] || "Not found",
-      date: result["Date"] || "Not found",
-      spf, dkim, dmarc,
-      safeMeter: result["Safe Meter"],
-      senderIP, ipLocation
-    });
-
-    res.json(result);
-
   } catch (err) {
     console.error("Analyze error:", err);
     res.status(500).json({ error: "Analysis failed", details: err.message });

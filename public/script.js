@@ -73,6 +73,7 @@ if (submitBtn) {
 }
 
 // ------------------ ANALYZE HEADER ------------------
+// ------------------ ANALYZE HEADER ------------------
 async function analyzeHeader() {
   const header = document.getElementById('headerInput').value;
   if (!header.trim()) {
@@ -80,24 +81,14 @@ async function analyzeHeader() {
     return;
   }
 
-  const token = localStorage.getItem('token');
-  if (!token) {
-    alert('Please login first');
-    return;
-  }
-
   try {
     const res = await fetch(`${BACKEND_URL}/analyze`, {
       method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
+      headers: { 'Content-Type': 'application/json' }, // 🔹 No token for /analyze
       body: JSON.stringify({ header })
     });
 
-    if (res.status === 401) throw new Error("Unauthorized – Please login again");
-    if (res.status === 404) throw new Error('/analyze endpoint not found');
+    if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
 
     const data = await res.json();
 
@@ -105,16 +96,16 @@ async function analyzeHeader() {
     resultDiv.style.display = "block";
     resultDiv.innerHTML = `
       <table border="1" style="border-collapse: collapse; margin-top: 10px; width: 100%;">
-        <tr><th>From</th><td>${data.from}</td></tr>
-        <tr><th>To</th><td>${data.to}</td></tr>
-        <tr><th>Subject</th><td>${data.subject}</td></tr>
-        <tr><th>Date</th><td>${data.date}</td></tr>
-        <tr><th>SPF</th><td>${data.spf}</td></tr>
-        <tr><th>DKIM</th><td>${data.dkim}</td></tr>
-        <tr><th>DMARC</th><td>${data.dmarc}</td></tr>
-        <tr><th>Safe Meter</th><td>${data.safeMeter}</td></tr>
-        <tr><th>IP</th><td>${data.senderIP}</td></tr>
-        <tr><th>Location</th><td>${data.ipLocation}</td></tr>
+        <tr><th>From</th><td>${data.from || data.From}</td></tr>
+        <tr><th>To</th><td>${data.to || data.To}</td></tr>
+        <tr><th>Subject</th><td>${data.subject || data.Subject}</td></tr>
+        <tr><th>Date</th><td>${data.date || data.Date}</td></tr>
+        <tr><th>SPF</th><td>${data.spf || data["SPF Status"]}</td></tr>
+        <tr><th>DKIM</th><td>${data.dkim || data["DKIM Status"]}</td></tr>
+        <tr><th>DMARC</th><td>${data.dmarc || data["DMARC Status"]}</td></tr>
+        <tr><th>Safe Meter</th><td>${data.safeMeter || data["Safe Meter"]}</td></tr>
+        <tr><th>IP</th><td>${data.senderIP || data["Sender IP"]}</td></tr>
+        <tr><th>Location</th><td>${data.ipLocation || data["IP Location"]}</td></tr>
       </table>
     `;
     fetchHistory();
@@ -123,7 +114,6 @@ async function analyzeHeader() {
     document.getElementById('result').innerHTML = `<p style="color:red;">❌ ${err.message}</p>`;
   }
 }
-
 // ------------------ FETCH HISTORY ------------------
 async function fetchHistory() {
   const token = localStorage.getItem('token');

@@ -26,26 +26,30 @@ try {
 }
 
 // ---------------- MIDDLEWARE ----------------
+// ---------------- MIDDLEWARE ----------------
 app.use(express.json());
 
-// Allowed origins (update with any additional dev URLs you use)
+// Allowed origins (add all possible frontends you use)
 const allowedOrigins = [
   "https://email-header-frontend.onrender.com",
   "http://localhost:3000",
-  "http://127.0.0.1:5500"
+  "http://127.0.0.1:5500"  // added for local file testing
 ];
 
 app.use(cors({
-  origin: [
-    "https://email-header-frontend.onrender.com", // your frontend domain
-    "http://localhost:3000",                      // for local testing
-  ],
-  methods: ["GET", "POST"],
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error("Not allowed by CORS: " + origin));
+    }
+  },
+  methods: ["GET", "POST", "DELETE"],
   credentials: true
 }));
+
 // Ensure OPTIONS preflight responds
 app.options('*', cors());
-
 // ---------------- DATABASE ----------------
 const MONGO_URI = process.env.MONGO_URI || "mongodb+srv://aandal:aandal2005@emailheadercluster.e2ir8k8.mongodb.net/?retryWrites=true&w=majority&appName=EmailHeaderCluster";
 

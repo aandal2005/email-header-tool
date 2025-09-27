@@ -4,7 +4,7 @@ require('dotenv').config();
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
-const dns = require("dns").promises; // kept - you can use getDmarcRecord later if needed
+const dns = require("dns").promises;
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 
@@ -12,44 +12,33 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET || "YourJWTSecretKey123!";
 
-// Use Node's global fetch (Node 18+) — avoids node-fetch version problems
-const fetchFn = globalThis.fetch.bind(globalThis);
+// ------------------ MIDDLEWARE ------------------
+// Increase payload limit to avoid 413 error
+app.use(express.json({ limit: "2mb" }));
+app.use(express.urlencoded({ extended: true, limit: "2mb" }));
 
-// Try loading geoip-lite (optional). If not installed, server will still work.
-let geoip = null;
-try {
-  geoip = require("geoip-lite");
-} catch (err) {
-  // geoip not available — we will gracefully fallback to online APIs only
-  geoip = null;
-  console.warn("geoip-lite not installed — falling back to online IP lookup only.");
-}
-
-// ---------------- MIDDLEWARE ----------------
-// ---------------- MIDDLEWARE ----------------
-app.use(express.json());
-
-// Allowed origins (add all possible frontends you use)
+// CORS fix
 const allowedOrigins = [
   "https://email-header-frontend.onrender.com",
   "http://localhost:3000",
-  "http://127.0.0.1:5500"  // added for local file testing
+  "http://127.0.0.1:5500"
 ];
 
 app.use(cors({
-  origin: function (origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error("Not allowed by CORS: " + origin));
+  origin: function(origin, callback){
+    if(!origin) return callback(null, true); // allow server-to-server requests or curl
+    if(allowedOrigins.indexOf(origin) === -1){
+      return callback(new Error("CORS policy blocked this origin"), false);
     }
+    return callback(null, true);
   },
-  methods: ["GET", "POST", "DELETE"],
+  methods: ["GET","POST","DELETE","OPTIONS"],
   credentials: true
 }));
 
-// Ensure OPTIONS preflight responds
+// Respond to preflight requests
 app.options('*', cors());
+
 // ---------------- DATABASE ----------------
 const MONGO_URI = process.env.MONGO_URI || "mongodb+srv://aandal:aandal2005@emailheadercluster.e2ir8k8.mongodb.net/?retryWrites=true&w=majority&appName=EmailHeaderCluster";
 
@@ -80,7 +69,6 @@ const headerSchema = new mongoose.Schema({
 
 const User = mongoose.model("User", userSchema);
 const Header = mongoose.model("Header", headerSchema);
-
 // ---------------- HELPERS ----------------
 function extractSenderIP(header) {
   // find Received: lines, scan bottom-to-top (earliest hop)

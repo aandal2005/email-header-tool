@@ -1,48 +1,36 @@
-// server.js
 require('dotenv').config();
-
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
-const fetch = require("node-fetch");
+const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-const JWT_SECRET = process.env.JWT_SECRET || "YourJWTSecretKey123!";
-const IPWHO_KEY = process.env.IPWHO_KEY || ""; // your ipwhois.io API key
+const JWT_SECRET = process.env.JWT_SECRET;
+
+// ---------------- MONGODB ----------------
+mongoose.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true })
+  .then(() => console.log("✅ MongoDB connected"))
+  .catch(err => console.error("❌ MongoDB connection error:", err));
 
 // ---------------- MIDDLEWARE ----------------
 app.use(express.json());
 
-const allowedOrigins = [
-  "https://email-header-frontend.onrender.com",
-  "http://localhost:3000"
-];
-
+const allowedOrigins = ["https://email-header-frontend.onrender.com", "http://localhost:3000"];
 app.use(cors({
   origin: function(origin, callback){
-    if(!origin) return callback(null, true); // allow Postman or mobile
+    if(!origin) return callback(null, true); // allow Postman or no-origin requests
     if(allowedOrigins.indexOf(origin) === -1){
-      const msg = `CORS policy blocks access from: ${origin}`;
-      return callback(new Error(msg), false);
+      return callback(new Error(`CORS not allowed for origin: ${origin}`), false);
     }
     return callback(null, true);
   },
   credentials: true,
-  methods: ["GET","POST","DELETE","OPTIONS"],
-  allowedHeaders: ["Content-Type","Authorization"]
+  methods: ['GET','POST','DELETE','OPTIONS'],
+  allowedHeaders: ['Content-Type','Authorization']
 }));
-
-app.options("*", cors()); // handle preflight
-
-// ---------------- DATABASE ----------------
-const MONGO_URI = process.env.MONGO_URI || "mongodb+srv://aandal:aandal2005@emailheadercluster.e2ir8k8.mongodb.net/?retryWrites=true&w=majority";
-
-mongoose.connect(MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true })
-  .then(() => console.log("✅ MongoDB connected successfully"))
-  .catch(err => console.error("❌ MongoDB connection error:", err));
 
 // ---------------- SCHEMAS ----------------
 const userSchema = new mongoose.Schema({
@@ -63,40 +51,13 @@ const headerSchema = new mongoose.Schema({
   safeMeter: String,
   senderIP: String,
   ipLocation: String,
+  createdAt: { type: Date, default: Date.now }
 });
 
 const User = mongoose.model("User", userSchema);
 const Header = mongoose.model("Header", headerSchema);
 
-// ---------------- HELPERS ----------------
-function extractSenderIP(header) {
-  const receivedLines = header.split(/\r?\n/).filter(l => l.toLowerCase().startsWith("received:"));
-  for (let i = receivedLines.length - 1; i >= 0; i--) {
-    const line = receivedLines[i];
-    let m = line.match(/\[([0-9]{1,3}(?:\.[0-9]{1,3}){3})\]/);
-    if (m && m[1]) return m[1];
-    m = line.match(/([0-9]{1,3}(?:\.[0-9]{1,3}){3})/);
-    if (m && m[1]) return m[1];
-  }
-  return null;
-}
-
-async function getIPLocation(ip) {
-  try {
-    const url = IPWHO_KEY
-      ? `https://ipwho.is/${ip}?key=${IPWHO_KEY}`
-      : `https://ipwho.is/${ip}`;
-    const res = await fetch(url);
-    const data = await res.json();
-    if (data.success === false) return "Unknown";
-    return `${data.city || 'Unknown'}, ${data.region || 'Unknown'}, ${data.country || 'Unknown'}`;
-  } catch (err) {
-    console.error("IP lookup error:", err);
-    return "Lookup failed";
-  }
-}
-
-// ---------------- AUTH MIDDLEWARE ----------------
+// ---------------- AUTH ----------------
 function authenticateToken(req, res, next) {
   const token = req.headers['authorization']?.split(' ')[1];
   if (!token) return res.status(401).json({ error: "No token provided" });
@@ -111,12 +72,12 @@ function authenticateToken(req, res, next) {
 // ---------------- ROUTES ----------------
 app.get("/", (req, res) => res.send("✅ Email Header Analyzer API running"));
 
-// --------- REGISTER ---------
+// ---- REGISTER ----
 app.post("/register", async (req, res) => {
-  const { name, email, password } = req.body;
-  if (!name || !email || !password) return res.status(400).json({ error: "All fields required" });
-
   try {
+    const { name, email, password } = req.body;
+    if (!name || !email || !password) return res.status(400).json({ error: "All fields required" });
+
     const existing = await User.findOne({ email });
     if (existing) return res.status(400).json({ error: "Email already exists" });
 
@@ -131,12 +92,12 @@ app.post("/register", async (req, res) => {
   }
 });
 
-// --------- LOGIN ---------
+// ---- LOGIN ----
 app.post("/login", async (req, res) => {
-  const { email, password } = req.body;
-  if (!email || !password) return res.status(400).json({ error: "All fields required" });
-
   try {
+    const { email, password } = req.body;
+    if (!email || !password) return res.status(400).json({ error: "All fields required" });
+
     const user = await User.findOne({ email });
     if (!user) return res.status(400).json({ error: "Invalid credentials" });
 
@@ -151,23 +112,21 @@ app.post("/login", async (req, res) => {
   }
 });
 
-// --------- ANALYZE HEADER ---------
+// ---- ANALYZE ----
 app.post("/analyze", async (req, res) => {
   try {
     const { header } = req.body;
     if (!header) return res.status(400).json({ error: "No header provided" });
 
-    const importantKeys = ["From", "To", "Subject", "Date"];
-    const lines = header.split(/\r?\n/);
+    const importantKeys = ["From","To","Subject","Date"];
+    const lines = header.split("\n");
     const result = {};
 
     lines.forEach(line => {
-      const [key, ...rest] = line.split(":");
+      const [key,...rest] = line.split(":");
       if (!key || rest.length === 0) return;
       const trimmedKey = key.trim();
-      if (importantKeys.includes(trimmedKey)) {
-        result[trimmedKey] = rest.join(":").trim();
-      }
+      if (importantKeys.includes(trimmedKey)) result[trimmedKey] = rest.join(":").trim();
     });
 
     const spf = (header.match(/spf=(\w+)/i)?.[1] || "not found").toLowerCase();
@@ -178,45 +137,58 @@ app.post("/analyze", async (req, res) => {
     result["DKIM Status"] = dkim;
     result["DMARC Status"] = dmarc;
 
-    const passCount = [spf, dkim, dmarc].filter(v => v === "pass").length;
-    result["Safe Meter"] = passCount === 3
-      ? "✅ Safe – All checks passed"
-      : passCount >= 2
-      ? "⚠️ Risk – Partial checks passed"
-      : "❌ Unsafe – Failed checks";
+    const passCount = [spf, dkim, dmarc].filter(v => v==="pass").length;
+    result["Safe Meter"] = passCount===3 ? "✅ Safe – All checks passed" :
+                           passCount>=2 ? "⚠️ Risk – Partial checks passed" :
+                           "❌ Unsafe – Failed checks";
 
-    // Sender IP + location
-    let senderIP = extractSenderIP(header) || "Not found";
-    let ipLocation = senderIP !== "Not found" ? await getIPLocation(senderIP) : "Unknown";
+    // ---- Sender IP & Geo ----
+    const receivedLines = header.split("\n").filter(l => l.toLowerCase().startsWith("received:"));
+    let senderIP = "Not found";
+    let ipLocation = "Unknown";
+    const apiKey = process.env.IP_GEO_API_KEY;
+
+    for (let i=receivedLines.length-1; i>=0; i--) {
+      const match = receivedLines[i].match(/\[([0-9.]+)\]/);
+      if (match) {
+        senderIP = match[1];
+        try {
+          const geoRes = await fetch(`https://ipinfo.io/${senderIP}?token=${apiKey}`);
+          const geoData = await geoRes.json();
+          ipLocation = geoData.city ? `${geoData.city}, ${geoData.region}, ${geoData.country}` : "Lookup failed";
+        } catch {
+          ipLocation = "Lookup failed";
+        }
+        break;
+      }
+    }
 
     result["Sender IP"] = senderIP;
     result["IP Location"] = ipLocation;
 
-    // Save to DB
+    // ---- Save to DB ----
     await Header.create({
       from: result["From"] || "Not found",
       to: result["To"] || "Not found",
       subject: result["Subject"] || "Not found",
       date: result["Date"] || "Not found",
-      spf,
-      dkim,
-      dmarc,
+      spf, dkim, dmarc,
       safeMeter: result["Safe Meter"],
-      senderIP,
-      ipLocation,
+      senderIP, ipLocation
     });
 
     res.json(result);
+
   } catch (err) {
     console.error("Analyze error:", err);
     res.status(500).json({ error: "Analysis failed", details: err.message });
   }
 });
 
-// --------- FETCH HISTORY ---------
-app.get("/history", authenticateToken, async (req, res) => {
+// ---- HISTORY ----
+app.get("/history", authenticateToken, async (req,res) => {
   try {
-    const history = await Header.find().sort({ _id: -1 }).limit(50);
+    const history = await Header.find().sort({_id:-1}).limit(50);
     res.json(history);
   } catch (err) {
     console.error(err);
@@ -224,9 +196,9 @@ app.get("/history", authenticateToken, async (req, res) => {
   }
 });
 
-// --------- CLEAR HISTORY (Admin only) ---------
-app.delete("/history", authenticateToken, async (req, res) => {
-  if (req.user.role !== 'admin') return res.status(403).json({ error: "Admins only" });
+// ---- CLEAR HISTORY ----
+app.delete("/history", authenticateToken, async (req,res) => {
+  if (req.user.role !== "admin") return res.status(403).json({ error: "Admins only" });
   try {
     await Header.deleteMany({});
     res.json({ message: "✅ History cleared" });
@@ -237,6 +209,4 @@ app.delete("/history", authenticateToken, async (req, res) => {
 });
 
 // ---------------- START SERVER ----------------
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-});
+app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));

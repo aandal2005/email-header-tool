@@ -36,20 +36,13 @@ const allowedOrigins = [
 ];
 
 app.use(cors({
-  origin: function (origin, callback) {
-    // allow requests with no origin (like curl or server-to-server)
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.indexOf(origin) !== -1) {
-      return callback(null, true);
-    } else {
-      return callback(new Error('CORS policy: This origin is not allowed'), false);
-    }
-  },
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  optionsSuccessStatus: 200
+  origin: [
+    "https://email-header-frontend.onrender.com", // your frontend domain
+    "http://localhost:3000",                      // for local testing
+  ],
+  methods: ["GET", "POST"],
+  credentials: true
 }));
-
 // Ensure OPTIONS preflight responds
 app.options('*', cors());
 

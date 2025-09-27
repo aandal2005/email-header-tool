@@ -119,22 +119,27 @@ app.post("/login", async (req, res) => {
 });
 
 // ---- ANALYZE ----
+// --------- ANALYZE HEADER ---------
 app.post("/analyze", async (req, res) => {
   try {
-    const { header } = req.body || {}; // safer
+    const { header } = req.body;
     if (!header) return res.status(400).json({ error: "No header provided" });
 
-    const importantKeys = ["From","To","Subject","Date"];
-    const lines = header.split("\n");
+    const importantKeys = ["From", "To", "Subject", "Date"];
+    const lines = header.split(/\r?\n/);
     const result = {};
 
+    // Extract basic header fields
     lines.forEach(line => {
-      const [key,...rest] = line.split(":");
+      const [key, ...rest] = line.split(":");
       if (!key || rest.length === 0) return;
       const trimmedKey = key.trim();
-      if (importantKeys.includes(trimmedKey)) result[trimmedKey] = rest.join(":").trim();
+      if (importantKeys.includes(trimmedKey)) {
+        result[trimmedKey] = rest.join(":").trim();
+      }
     });
 
+    // SPF, DKIM, DMARC extraction
     const spf = (header.match(/spf=(\w+)/i)?.[1] || "not found").toLowerCase();
     const dkim = (header.match(/dkim=(\w+)/i)?.[1] || "not found").toLowerCase();
     const dmarc = (header.match(/dmarc=(\w+)/i)?.[1] || "not found").toLowerCase();
@@ -143,36 +148,48 @@ app.post("/analyze", async (req, res) => {
     result["DKIM Status"] = dkim;
     result["DMARC Status"] = dmarc;
 
-    const passCount = [spf, dkim, dmarc].filter(v => v==="pass").length;
-    result["Safe Meter"] = passCount===3 ? "✅ Safe – All checks passed" :
-                           passCount>=2 ? "⚠️ Risk – Partial checks passed" :
-                           "❌ Unsafe – Failed checks";
+    const passCount = [spf, dkim, dmarc].filter(v => v === "pass").length;
+    result["Safe Meter"] = passCount === 3
+      ? "✅ Safe – All checks passed"
+      : passCount >= 2
+      ? "⚠️ Risk – Partial checks passed"
+      : "❌ Unsafe – Failed checks";
 
-    const receivedLines = header.split("\n").filter(l => l.toLowerCase().startsWith("received:"));
-    let senderIP = "Not found";
+    // Sender IP extraction
+    let senderIP = extractSenderIP(header) || "Not found";
     let ipLocation = "Unknown";
-    const apiKey = process.env.IP_GEO_API_KEY;
 
-    for (let i=receivedLines.length-1; i>=0; i--) {
-      const match = receivedLines[i].match(/\[([0-9.]+)\]/);
-      if (match) {
-        senderIP = match[1];
-        try {
-          const geoRes = await fetch(`https://ipinfo.io/${senderIP}?token=${apiKey}`);
-          const geoData = await geoRes.json();
-          ipLocation = geoData.city ? `${geoData.city}, ${geoData.region}, ${geoData.country}` : "Lookup failed";
-        } catch {
-          ipLocation = "Lookup failed";
-        }
-        break;
+    if (senderIP !== "Not found") {
+      try {
+        const response = await fetch(`https://ipwhois.app/json/${senderIP}`);
+        const geoData = await response.json();
+        ipLocation = geoData.city
+          ? `${geoData.city}, ${geoData.country}`
+          : "Lookup failed";
+      } catch (err) {
+        console.error("IP lookup error:", err);
+        ipLocation = "Lookup failed";
       }
     }
 
     result["Sender IP"] = senderIP;
     result["IP Location"] = ipLocation;
 
-    res.json(result);
+    // ✅ FIX: This await is now inside async function
+    await Header.create({
+      from: result["From"] || "Not found",
+      to: result["To"] || "Not found",
+      subject: result["Subject"] || "Not found",
+      date: result["Date"] || "Not found",
+      spf,
+      dkim,
+      dmarc,
+      safeMeter: result["Safe Meter"],
+      senderIP,
+      ipLocation,
+    });
 
+    res.json(result);
   } catch (err) {
     console.error("Analyze error:", err);
     res.status(500).json({ error: "Analysis failed", details: err.message });

@@ -4,26 +4,23 @@ const mongoose = require("mongoose");
 const cors = require("cors");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
-const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
+const fetch = require('node-fetch');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET;
-app.use(express.json()); 
 
-// ---------------- MONGODB ----------------
-mongoose.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true })
-  .then(() => console.log("✅ MongoDB connected"))
-  .catch(err => console.error("❌ MongoDB connection error:", err));
+app.use(express.json());
 
+// ---------------- CORS ----------------
 const allowedOrigins = [
   "https://email-header-frontend.onrender.com",
-  "http://localhost:3000" // for local testing
+  "http://localhost:3000"
 ];
 
 app.use(cors({
   origin: function(origin, callback){
-    if(!origin) return callback(null, true); 
+    if(!origin) return callback(null, true);
     if(allowedOrigins.indexOf(origin) === -1){
       const msg = `The CORS policy does not allow access from the origin: ${origin}`;
       return callback(new Error(msg), false);
@@ -34,8 +31,12 @@ app.use(cors({
   methods: ["GET", "POST", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"]
 }));
-
 app.options("*", cors());
+
+// ---------------- MONGODB ----------------
+mongoose.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true })
+  .then(() => console.log("✅ MongoDB connected"))
+  .catch(err => console.error("❌ MongoDB connection error:", err));
 
 // ---------------- SCHEMAS ----------------
 const userSchema = new mongoose.Schema({
@@ -72,6 +73,12 @@ function authenticateToken(req, res, next) {
     req.user = user;
     next();
   });
+}
+
+// ---------------- HELPERS ----------------
+function extractSenderIP(header) {
+  const match = header.match(/\b\d{1,3}(\.\d{1,3}){3}\b/);
+  return match ? match[0] : null;
 }
 
 // ---------------- ROUTES ----------------
@@ -170,7 +177,6 @@ app.post("/analyze", async (req, res) => {
     result["Sender IP"] = senderIP;
     result["IP Location"] = ipLocation;
 
-    // ✅ Save only once
     await Header.create({
       from: result["From"] || "Not found",
       to: result["To"] || "Not found",
@@ -211,6 +217,26 @@ app.delete("/history", authenticateToken, async (req,res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Failed to clear history" });
+  }
+});
+
+// ---- PROXY (Optional for frontend CORS) ----
+app.post("/proxy-analyze", async (req, res) => {
+  try {
+    const { header } = req.body;
+    const token = req.headers.authorization;
+
+    const response = await fetch('https://email-header-backend.onrender.com/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': token },
+      body: JSON.stringify({ header })
+    });
+
+    const data = await response.json();
+    res.json(data);
+  } catch (err) {
+    console.error("Proxy error:", err);
+    res.status(500).json({ error: "Proxy failed" });
   }
 });
 

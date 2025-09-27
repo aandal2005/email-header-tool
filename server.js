@@ -4,7 +4,6 @@ require('dotenv').config();
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
-const dns = require("dns").promises;
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const fetch = require("node-fetch");
@@ -12,9 +11,10 @@ const fetch = require("node-fetch");
 const app = express();
 const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET || "YourJWTSecretKey123!";
+const IPWHO_KEY = process.env.IPWHO_KEY || ""; // your ipwhois.io API key
 
-// ------------------ MIDDLEWARE ------------------
-
+// ---------------- MIDDLEWARE ----------------
+app.use(express.json());
 
 const allowedOrigins = [
   "https://email-header-frontend.onrender.com",
@@ -23,10 +23,9 @@ const allowedOrigins = [
 
 app.use(cors({
   origin: function(origin, callback){
-    // allow requests with no origin (Postman, mobile apps, etc.)
-    if(!origin) return callback(null, true);
+    if(!origin) return callback(null, true); // allow Postman or mobile
     if(allowedOrigins.indexOf(origin) === -1){
-      const msg = `The CORS policy for this site does not allow access from the specified Origin: ${origin}`;
+      const msg = `CORS policy blocks access from: ${origin}`;
       return callback(new Error(msg), false);
     }
     return callback(null, true);
@@ -36,10 +35,10 @@ app.use(cors({
   allowedHeaders: ["Content-Type","Authorization"]
 }));
 
-// Preflight handling for all routes
-app.options("*", cors());
+app.options("*", cors()); // handle preflight
+
 // ---------------- DATABASE ----------------
-const MONGO_URI = process.env.MONGO_URI || "mongodb+srv://aandal:aandal2005@emailheadercluster.e2ir8k8.mongodb.net/?retryWrites=true&w=majority&appName=EmailHeaderCluster";
+const MONGO_URI = process.env.MONGO_URI || "mongodb+srv://aandal:aandal2005@emailheadercluster.e2ir8k8.mongodb.net/?retryWrites=true&w=majority";
 
 mongoose.connect(MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true })
   .then(() => console.log("✅ MongoDB connected successfully"))
@@ -68,20 +67,33 @@ const headerSchema = new mongoose.Schema({
 
 const User = mongoose.model("User", userSchema);
 const Header = mongoose.model("Header", headerSchema);
+
 // ---------------- HELPERS ----------------
 function extractSenderIP(header) {
-  // find Received: lines, scan bottom-to-top (earliest hop)
   const receivedLines = header.split(/\r?\n/).filter(l => l.toLowerCase().startsWith("received:"));
   for (let i = receivedLines.length - 1; i >= 0; i--) {
     const line = receivedLines[i];
-    // prefer bracketed IP [1.2.3.4]
     let m = line.match(/\[([0-9]{1,3}(?:\.[0-9]{1,3}){3})\]/);
     if (m && m[1]) return m[1];
-    // otherwise try any IPv4-looking substring
     m = line.match(/([0-9]{1,3}(?:\.[0-9]{1,3}){3})/);
     if (m && m[1]) return m[1];
   }
   return null;
+}
+
+async function getIPLocation(ip) {
+  try {
+    const url = IPWHO_KEY
+      ? `https://ipwho.is/${ip}?key=${IPWHO_KEY}`
+      : `https://ipwho.is/${ip}`;
+    const res = await fetch(url);
+    const data = await res.json();
+    if (data.success === false) return "Unknown";
+    return `${data.city || 'Unknown'}, ${data.region || 'Unknown'}, ${data.country || 'Unknown'}`;
+  } catch (err) {
+    console.error("IP lookup error:", err);
+    return "Lookup failed";
+  }
 }
 
 // ---------------- AUTH MIDDLEWARE ----------------
@@ -149,7 +161,6 @@ app.post("/analyze", async (req, res) => {
     const lines = header.split(/\r?\n/);
     const result = {};
 
-    // Extract basic header fields
     lines.forEach(line => {
       const [key, ...rest] = line.split(":");
       if (!key || rest.length === 0) return;
@@ -159,7 +170,6 @@ app.post("/analyze", async (req, res) => {
       }
     });
 
-    // SPF, DKIM, DMARC extraction (simple)
     const spf = (header.match(/spf=(\w+)/i)?.[1] || "not found").toLowerCase();
     const dkim = (header.match(/dkim=(\w+)/i)?.[1] || "not found").toLowerCase();
     const dmarc = (header.match(/dmarc=(\w+)/i)?.[1] || "not found").toLowerCase();
@@ -175,59 +185,14 @@ app.post("/analyze", async (req, res) => {
       ? "⚠️ Risk – Partial checks passed"
       : "❌ Unsafe – Failed checks";
 
-    // ---------- Sender IP & Geo (IPinfo -> geoip-lite fallback) ----------
+    // Sender IP + location
     let senderIP = extractSenderIP(header) || "Not found";
-    let ipLocation = "Unknown";
-
-    if (senderIP !== "Not found") {
-      try {
-        // Prefer IPinfo if token provided, otherwise try without token (limited)
-        const ipinfoKey = process.env.IP_GEO_API_KEY;
-        const ipinfoUrl = ipinfoKey
-          ? `https://ipinfo.io/${senderIP}/json?token=${ipinfoKey}`
-          : `https://ipinfo.io/${senderIP}/json`;
-
-        const geoRes = await fetchFn(ipinfoUrl);
-        if (geoRes && geoRes.ok) {
-          const geoData = await geoRes.json();
-          if (geoData && (geoData.city || geoData.region || geoData.country)) {
-            ipLocation = `${geoData.city || 'Unknown'}, ${geoData.region || 'Unknown'}, ${geoData.country || 'Unknown'}`;
-          } else {
-            // fallback to geoip-lite
-            if (geoip) {
-              const g = geoip.lookup(senderIP);
-              if (g) ipLocation = `${g.city || 'Unknown'}, ${g.region || 'Unknown'}, ${g.country || 'Unknown'}`;
-              else ipLocation = "Lookup failed";
-            } else {
-              ipLocation = "Lookup failed";
-            }
-          }
-        } else {
-          // if IPinfo failed (non-OK), fallback to geoip-lite if available
-          if (geoip) {
-            const g = geoip.lookup(senderIP);
-            if (g) ipLocation = `${g.city || 'Unknown'}, ${g.region || 'Unknown'}, ${g.country || 'Unknown'}`;
-            else ipLocation = "Lookup failed";
-          } else {
-            ipLocation = "Lookup failed";
-          }
-        }
-      } catch (err) {
-        console.error("IP lookup error:", err);
-        if (geoip) {
-          const g = geoip.lookup(senderIP);
-          if (g) ipLocation = `${g.city || 'Unknown'}, ${g.region || 'Unknown'}, ${g.country || 'Unknown'}`;
-          else ipLocation = "Lookup failed";
-        } else {
-          ipLocation = "Lookup failed";
-        }
-      }
-    }
+    let ipLocation = senderIP !== "Not found" ? await getIPLocation(senderIP) : "Unknown";
 
     result["Sender IP"] = senderIP;
     result["IP Location"] = ipLocation;
 
-    // Save result to DB
+    // Save to DB
     await Header.create({
       from: result["From"] || "Not found",
       to: result["To"] || "Not found",

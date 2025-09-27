@@ -13,32 +13,30 @@ const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET || "YourJWTSecretKey123!";
 
 // ------------------ MIDDLEWARE ------------------
-// Increase payload limit to avoid 413 error
-app.use(express.json({ limit: "2mb" }));
-app.use(express.urlencoded({ extended: true, limit: "2mb" }));
 
-// CORS fix
+
 const allowedOrigins = [
   "https://email-header-frontend.onrender.com",
-  "http://localhost:3000",
-  "http://127.0.0.1:5500"
+  "http://localhost:3000"
 ];
 
 app.use(cors({
   origin: function(origin, callback){
-    if(!origin) return callback(null, true); // allow server-to-server requests or curl
+    // allow requests with no origin (Postman, mobile apps, etc.)
+    if(!origin) return callback(null, true);
     if(allowedOrigins.indexOf(origin) === -1){
-      return callback(new Error("CORS policy blocked this origin"), false);
+      const msg = `The CORS policy for this site does not allow access from the specified Origin: ${origin}`;
+      return callback(new Error(msg), false);
     }
     return callback(null, true);
   },
+  credentials: true,
   methods: ["GET","POST","DELETE","OPTIONS"],
-  credentials: true
+  allowedHeaders: ["Content-Type","Authorization"]
 }));
 
-// Respond to preflight requests
-app.options('*', cors());
-
+// Preflight handling for all routes
+app.options("*", cors());
 // ---------------- DATABASE ----------------
 const MONGO_URI = process.env.MONGO_URI || "mongodb+srv://aandal:aandal2005@emailheadercluster.e2ir8k8.mongodb.net/?retryWrites=true&w=majority&appName=EmailHeaderCluster";
 

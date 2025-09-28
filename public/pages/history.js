@@ -46,30 +46,6 @@ function fetchHistory() {
     });
 }
 
-async function deleteHistory(id) {
-  const token = localStorage.getItem("token");
-  if (!token) {
-    alert("You must log in first!");
-    return;
-  }
-
-  if (!confirm("Are you sure you want to delete this record?")) return;
-
-  try {
-    const res = await fetch(`https://email-header-backend.onrender.com/history/${id}`, {
-      method: "DELETE",
-      headers: { "Authorization": "Bearer " + token }
-    });
-
-    if (!res.ok) throw new Error("Failed to delete");
-
-    alert("Deleted successfully");
-    window.location.reload(); // refresh table
-  } catch (err) {
-    alert("Error deleting: " + err.message);
-  }
-}
-
 // ✅ Clear History (Admins only)
 function clearHistory() {
   const token = localStorage.getItem('token');

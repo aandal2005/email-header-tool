@@ -13,7 +13,6 @@
       padding: 0;
       color: #333;
     }
-
     header {
       background: #1e293b;
       color: white;
@@ -21,75 +20,58 @@
       text-align: center;
       font-size: 22px;
     }
-
     main {
-      max-width: 1100px;
+      max-width: 1000px;
       margin: 30px auto;
       background: white;
       padding: 25px;
       border-radius: 12px;
       box-shadow: 0 4px 12px rgba(0,0,0,0.1);
     }
-
     h1 {
       text-align: center;
       color: #2563eb;
-      margin-bottom: 20px;
     }
-
-    .table-container {
-      overflow-x: auto;
-    }
-
     table {
       width: 100%;
       border-collapse: collapse;
-      margin-top: 10px;
+      margin-top: 20px;
     }
-
     th, td {
       padding: 12px;
       text-align: center;
       border-bottom: 1px solid #ddd;
-      font-size: 14px;
     }
-
     th {
       background: #f3f4f6;
       color: #111827;
     }
-
-    tbody tr:hover {
-      background: #f9fafb;
-    }
-
-    .btn-group {
-      text-align: center;
-      margin-top: 20px;
-    }
-
     .btn {
-      margin: 5px;
+      margin: 15px 5px;
       padding: 10px 18px;
       border: none;
       border-radius: 8px;
       background: #2563eb;
       color: white;
       cursor: pointer;
-      font-size: 14px;
-      transition: background 0.2s ease-in-out;
     }
-
-    .btn:hover {
-      background: #1d4ed8;
+    .btn:hover { background: #1d4ed8; }
+    .delete-btn {
+      background: #dc2626;
+      color: white;
+      padding: 6px 12px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
     }
-
+    .delete-btn:hover {
+      background: #b91c1c;
+    }
     footer {
       text-align: center;
       padding: 15px;
       background: #1e293b;
       color: white;
-      margin-top: 30px;
     }
   </style>
 </head>
@@ -97,32 +79,31 @@
   <header>📑 Email Header History</header>
   <main>
     <h1>Analysis History</h1>
-    <div class="table-container">
-      <table>
-        <thead>
-          <tr>
-            <th>#</th>
-            <th>From</th>
-            <th>To</th>
-            <th>Subject</th>
-            <th>Date</th>
-            <th>Safe Meter</th>
-            <th>SPF</th>
-            <th>DKIM</th>
-            <th>DMARC</th>
-            <th>IP</th>
-            <th>Location</th>
-          </tr>
-        </thead>
-        <tbody id="historyTable">
-          <tr><td colspan="11">Loading history...</td></tr>
-        </tbody>
-      </table>
-    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>From</th>
+          <th>To</th>
+          <th>Subject</th>
+          <th>Date</th>
+          <th>Safe Meter</th>
+          <th>SPF</th>
+          <th>DKIM</th>
+          <th>DMARC</th>
+          <th>IP</th>
+          <th>Location</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody id="historyTable">
+        <tr><td colspan="12">Loading history...</td></tr>
+      </tbody>
+    </table>
 
-    <div class="btn-group">
-      <button class="btn" onclick="clearHistory()">🗑 Clear History</button>
-      <button class="btn" onclick="window.location.href='../analyzer.html'">⬅ Back to Analyzer</button>
+    <div style="text-align:center;">
+      <button class="btn" onclick="clearHistory()">🗑 Clear All History</button>
+      <button class="btn" onclick="window.location.href='analyzer.html'">⬅ Back to Analyzer</button>
     </div>
   </main>
   <footer>© 2025 Email Header Tool</footer>

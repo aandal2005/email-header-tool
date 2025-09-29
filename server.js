@@ -20,16 +20,15 @@ const allowedOrigins = [
 
 app.use(cors({
   origin: function(origin, callback){
-    if(!origin) return callback(null, true);
-    if(allowedOrigins.indexOf(origin) === -1){
-      const msg = `The CORS policy does not allow access from the origin: ${origin}`;
-      return callback(new Error(msg), false);
+    if (!origin) return callback(null, true);
+    if (!allowedOrigins.includes(origin)) {
+      return callback(new Error(`CORS blocked for ${origin}`), false);
     }
     return callback(null, true);
   },
   credentials: true,
-  methods: ["GET", "POST", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"]
+  methods: ["GET","POST","DELETE","OPTIONS"],
+  allowedHeaders: ["Content-Type","Authorization"]
 }));
 app.options("*", cors());
 

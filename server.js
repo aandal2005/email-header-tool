@@ -10,7 +10,10 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET;
 
-app.use(express.json());
+// ---------------- BODY PARSER ----------------
+// Increase JSON body limit to handle large email headers
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ limit: "10mb", extended: true }));
 
 // ---------------- CORS ----------------
 const allowedOrigins = [
@@ -20,12 +23,12 @@ const allowedOrigins = [
 
 app.use(cors({
   origin: function(origin, callback){
-    if(!origin) return callback(null, true);
-    if(allowedOrigins.indexOf(origin) === -1){
-      const msg = `The CORS policy does not allow access from the origin: ${origin}`;
-      return callback(new Error(msg), false);
+    if (!origin) return callback(null, true); // allow server-to-server or curl requests
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error(`CORS blocked for ${origin}`), false);
     }
-    return callback(null, true);
   },
   credentials: true,
   methods: ["GET", "POST", "DELETE", "OPTIONS"],
@@ -157,42 +160,32 @@ app.post("/analyze", async (req, res) => {
       : passCount >= 2
       ? "⚠️ Risk – Partial checks passed"
       : "❌ Unsafe – Failed checks";
-let senderIP = extractSenderIP(header) || "Not found";
-let ipLocation = "Unknown";
 
-if (senderIP !== "Not found") {
-  try {
-    // Use ipwhois.app
-    const response = await fetch(`https://ipwhois.app/json/${senderIP}`);
-    if (!response.ok) throw new Error(`HTTP error ${response.status}`);
+    let senderIP = extractSenderIP(header) || "Not found";
+    let ipLocation = "Unknown";
 
-    const geoData = await response.json();
-
-    if (geoData && geoData.success !== false) {
-      // success field is false for private/reserved IPs
-      ipLocation = geoData.city
-        ? `${geoData.city}, ${geoData.country}`
-        : `${geoData.country || "Unknown"}`;
-    } else {
-      ipLocation = "Private or unknown IP";
+    if (senderIP !== "Not found") {
+      try {
+        const response = await fetch(`https://ipwhois.app/json/${senderIP}`);
+        if (!response.ok) throw new Error(`HTTP error ${response.status}`);
+        const geoData = await response.json();
+        ipLocation = geoData.success !== false
+          ? geoData.city ? `${geoData.city}, ${geoData.country}` : `${geoData.country || "Unknown"}`
+          : "Private or unknown IP";
+      } catch (err) {
+        console.error("IP lookup error:", err.message);
+        try {
+          const fallback = await fetch(`http://ip-api.com/json/${senderIP}`);
+          const data = await fallback.json();
+          ipLocation = data.status === "success"
+            ? `${data.city || "Unknown"}, ${data.country || "Unknown"}`
+            : "Lookup failed";
+        } catch (fallbackErr) {
+          console.error("Fallback IP lookup failed:", fallbackErr.message);
+          ipLocation = "Lookup failed";
+        }
+      }
     }
-
-  } catch (err) {
-    console.error("IP lookup error:", err.message);
-
-    // Fallback: try another free API
-    try {
-      const fallback = await fetch(`http://ip-api.com/json/${senderIP}`);
-      const data = await fallback.json();
-      ipLocation = data.status === "success"
-        ? `${data.city || "Unknown"}, ${data.country || "Unknown"}`
-        : "Lookup failed";
-    } catch (fallbackErr) {
-      console.error("Fallback IP lookup failed:", fallbackErr.message);
-      ipLocation = "Lookup failed";
-    }
-  }
-}
 
     result["Sender IP"] = senderIP;
     result["IP Location"] = ipLocation;

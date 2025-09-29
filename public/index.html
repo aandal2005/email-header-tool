@@ -6,7 +6,6 @@
   <title>Email Header Analyzer - Login</title>
   <style>
     * { box-sizing: border-box; }
-
     body {
       margin: 0;
       font-family: Arial, sans-serif;
@@ -15,7 +14,6 @@
       display: flex;
       flex-direction: column;
     }
-
     header {
       background-color: #0d1b2a;
       padding: 15px;
@@ -27,12 +25,7 @@
       justify-content: center;
       align-items: center;
     }
-
-    header::before {
-      content: "📧";
-      margin-right: 10px;
-    }
-
+    header::before { content: "📧"; margin-right: 10px; }
     .container {
       flex: 1;
       display: flex;
@@ -40,7 +33,6 @@
       align-items: center;
       padding: 20px;
     }
-
     .card {
       background: white;
       border-radius: 12px;
@@ -50,12 +42,7 @@
       max-width: 400px;
       text-align: center;
     }
-
-    .card h2 {
-      color: #007bff;
-      margin-bottom: 20px;
-    }
-
+    .card h2 { color: #007bff; margin-bottom: 20px; }
     input {
       width: 100%;
       padding: 12px;
@@ -64,7 +51,6 @@
       border-radius: 8px;
       font-size: 1rem;
     }
-
     button {
       width: 100%;
       padding: 12px;
@@ -76,29 +62,10 @@
       margin-top: 10px;
       background-color: #007bff;
     }
-
-    button:hover {
-      background-color: #0056b3;
-    }
-
-    .toggle {
-      margin-top: 15px;
-      cursor: pointer;
-      color: #20c997;
-    }
-
-    .error {
-      color: red;
-      margin-top: 10px;
-      font-size: 0.9rem;
-    }
-
-    .success {
-      color: green;
-      margin-top: 10px;
-      font-size: 0.9rem;
-    }
-
+    button:hover { background-color: #0056b3; }
+    .toggle { margin-top: 15px; cursor: pointer; color: #20c997; }
+    .error { color: red; margin-top: 10px; font-size: 0.9rem; }
+    .success { color: green; margin-top: 10px; font-size: 0.9rem; }
     footer {
       background: #0d1b2a;
       text-align: center;
@@ -106,98 +73,111 @@
       color: white;
       font-size: 0.9rem;
     }
-
-    footer a {
-      color: #20c997;
-      text-decoration: none;
-    }
+    footer a { color: #20c997; text-decoration: none; }
   </style>
 </head>
 <body>
-  <header>Email Header Analyzer</header>
 
-  <div class="container">
-    <div class="card">
-      <h2 id="formTitle">Login</h2>
+<header>Email Header Analyzer</header>
+
+<div class="container">
+  <div class="card">
+    <h2 id="formTitle">Login</h2>
+
+    <!-- FORM START -->
+    <form id="authForm">
       <input type="text" id="name" placeholder="Name" style="display:none;">
-      <input type="email" id="email" placeholder="Email">
-      <input type="password" id="password" placeholder="Password">
-      <button id="submitBtn">Login</button>
-      <p class="toggle" onclick="toggleForm()">Don't have an account? Sign Up</p>
-      <p id="message"></p>
-      <a href="admin.html" id="adminPanelLink" style="display:none;">Admin Panel</a>
-    </div>
+      <input type="email" id="email" placeholder="Email" required>
+      <input type="password" id="password" placeholder="Password" required>
+      <button type="submit" id="submitBtn">Login</button>
+    </form>
+    <!-- FORM END -->
+
+    <p class="toggle" id="toggleLink">Don't have an account? Sign Up</p>
+    <p id="message"></p>
+    <a href="admin.html" id="adminPanelLink" style="display:none;">Admin Panel</a>
   </div>
+</div>
 
-  <footer>
-    © 2025 Email Header Tool | <a href="https://github.com/">GitHub</a>
-  </footer>
+<footer>
+  © 2025 Email Header Tool | <a href="https://github.com/">GitHub</a>
+</footer>
 
-  <script>
-    const BACKEND_URL = "https://email-header-backend.onrender.com";
-    let isSignup = false;
+<script>
+const BACKEND_URL = "https://email-header-backend.onrender.com";
+let isSignup = false;
 
-    const nameInput = document.getElementById('name');
-    const emailInput = document.getElementById('email');
-    const passwordInput = document.getElementById('password');
-    const formTitle = document.getElementById('formTitle');
-    const submitBtn = document.getElementById('submitBtn');
-    const message = document.getElementById('message');
+const nameInput = document.getElementById('name');
+const emailInput = document.getElementById('email');
+const passwordInput = document.getElementById('password');
+const formTitle = document.getElementById('formTitle');
+const submitBtn = document.getElementById('submitBtn');
+const message = document.getElementById('message');
+const toggleLink = document.getElementById('toggleLink');
+const adminPanelLink = document.getElementById('adminPanelLink');
+const authForm = document.getElementById('authForm');
 
-    function toggleForm() {
-      isSignup = !isSignup;
-      nameInput.style.display = isSignup ? 'block' : 'none';
-      formTitle.textContent = isSignup ? 'Sign Up' : 'Login';
-      submitBtn.textContent = isSignup ? 'Sign Up' : 'Login';
-      document.querySelector('.toggle').textContent =
-        isSignup ? 'Already have an account? Login' : "Don't have an account? Sign Up";
-      message.textContent = '';
-      message.className = '';
+// Toggle between login/signup
+toggleLink.addEventListener('click', () => {
+  isSignup = !isSignup;
+  nameInput.style.display = isSignup ? 'block' : 'none';
+  formTitle.textContent = isSignup ? 'Sign Up' : 'Login';
+  submitBtn.textContent = isSignup ? 'Sign Up' : 'Login';
+  toggleLink.textContent = isSignup ? 'Already have an account? Login' : "Don't have an account? Sign Up";
+  message.textContent = '';
+  message.className = '';
+});
+
+// Handle form submission
+authForm.addEventListener('submit', async (e) => {
+  e.preventDefault(); // prevent page reload
+
+  const email = emailInput.value.trim();
+  const password = passwordInput.value.trim();
+  const name = nameInput.value.trim();
+
+  if (!email || !password || (isSignup && !name)) {
+    message.className = 'error';
+    message.textContent = '❌ All fields are required';
+    return;
+  }
+
+  const endpoint = isSignup ? "/register" : "/login";
+
+  try {
+    const res = await fetch(`${BACKEND_URL}${endpoint}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(isSignup ? { name, email, password } : { email, password })
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      message.className = 'error';
+      message.textContent = `❌ ${data.error || "Something went wrong"}`;
+      return;
     }
 
-    submitBtn.addEventListener('click', async () => {
-      const email = emailInput.value.trim();
-      const password = passwordInput.value.trim();
-      const name = nameInput.value.trim();
+    message.className = 'success';
+    message.textContent = data.message || "✅ Success";
 
-      if (!email || !password || (isSignup && !name)) {
-        message.className = 'error';
-        message.textContent = '❌ All fields are required';
-        return;
-      }
+    // Login: save token and redirect
+    if (!isSignup && data.token) {
+      localStorage.setItem("token", data.token);
+      localStorage.setItem("role", data.role || "user");
 
-      const endpoint = isSignup ? "/register" : "/login";
+      if (data.role === "admin" && adminPanelLink) adminPanelLink.style.display = "block";
 
-      try {
-        const res = await fetch(`${BACKEND_URL}${endpoint}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(isSignup ? { name, email, password } : { email, password })
-        });
+      setTimeout(() => window.location.href = 'analyzer.html', 1200);
+    }
+  } catch (err) {
+    console.error("❌ Auth error:", err);
+    message.className = 'error';
+    message.textContent = `❌ ${err.message}`;
+  }
+});
+</script>
 
-        const data = await res.json();
-
-        if (!res.ok) {
-          message.className = 'error';
-          message.textContent = `❌ ${data.error || "Something went wrong"}`;
-        } else {
-          // For login: save token and redirect
-          if (!isSignup && data.token) {
-            localStorage.setItem("token", data.token);
-            message.className = 'success';
-            message.textContent = "✅ Login successful! Redirecting...";
-            setTimeout(() => window.location.href = 'analyzer.html', 1200);
-          } else {
-            message.className = 'success';
-            message.textContent = data.message || "✅ Account created successfully!";
-          }
-        }
-      } catch (err) {
-        console.error("❌ Error:", err);
-        message.className = 'error';
-        message.textContent = "❌ Network error";
-      }
-    });
-  </script>
 </body>
 </html>
